@@ -13,8 +13,28 @@ router.get('/devices', authMiddleware, async (req: Request, res: Response) => {
     
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { ewelinkAccessToken: true }
+      select: { 
+        ewelinkAccessToken: true
+      }
     });
+
+    // For legacy users, we need to find their migrated tenant
+    // This is a temporary solution during migration period
+    let userTenantId: string;
+    
+    // Try to find default tenant for legacy users
+    const defaultTenant = await prisma.tenant.findFirst({
+      where: { name: 'Default Tenant' }
+    });
+    
+    if (!defaultTenant) {
+      return res.status(400).json({ 
+        error: 'No tenant found for user. Please complete migration.',
+        code: 'TENANT_NOT_FOUND'
+      });
+    }
+    
+    userTenantId = defaultTenant.id;
     
     if (!user?.ewelinkAccessToken) {
       return res.status(400).json({ 
@@ -31,7 +51,12 @@ router.get('/devices', authMiddleware, async (req: Request, res: Response) => {
     // Update local device cache
     for (const device of devices) {
       await prisma.device.upsert({
-        where: { deviceId: device.deviceid },
+        where: { 
+          deviceId_tenantId: {
+            deviceId: device.deviceid,
+            tenantId: userTenantId
+          }
+        },
         update: {
           name: device.name,
           type: device.type,
@@ -47,7 +72,8 @@ router.get('/devices', authMiddleware, async (req: Request, res: Response) => {
           model: device.model || '',
           online: device.online,
           params: JSON.stringify(device.params),
-          capabilities: JSON.stringify(device.capabilities || [])
+          capabilities: JSON.stringify(device.capabilities || []),
+          tenantId: userTenantId
         }
       });
     }
@@ -68,8 +94,28 @@ router.get('/devices/:deviceId', authMiddleware, async (req: Request, res: Respo
     
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { ewelinkAccessToken: true }
+      select: { 
+        ewelinkAccessToken: true
+      }
     });
+
+    // For legacy users, we need to find their migrated tenant
+    // This is a temporary solution during migration period
+    let userTenantId: string;
+    
+    // Try to find default tenant for legacy users
+    const defaultTenant = await prisma.tenant.findFirst({
+      where: { name: 'Default Tenant' }
+    });
+    
+    if (!defaultTenant) {
+      return res.status(400).json({ 
+        error: 'No tenant found for user. Please complete migration.',
+        code: 'TENANT_NOT_FOUND'
+      });
+    }
+    
+    userTenantId = defaultTenant.id;
     
     if (!user?.ewelinkAccessToken) {
       return res.status(400).json({ 
@@ -108,8 +154,28 @@ router.post('/devices/:deviceId/control', authMiddleware, async (req: Request, r
     
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { ewelinkAccessToken: true }
+      select: { 
+        ewelinkAccessToken: true
+      }
     });
+
+    // For legacy users, we need to find their migrated tenant
+    // This is a temporary solution during migration period
+    let userTenantId: string;
+    
+    // Try to find default tenant for legacy users
+    const defaultTenant = await prisma.tenant.findFirst({
+      where: { name: 'Default Tenant' }
+    });
+    
+    if (!defaultTenant) {
+      return res.status(400).json({ 
+        error: 'No tenant found for user. Please complete migration.',
+        code: 'TENANT_NOT_FOUND'
+      });
+    }
+    
+    userTenantId = defaultTenant.id;
     
     if (!user?.ewelinkAccessToken) {
       return res.status(400).json({ 
@@ -127,7 +193,7 @@ router.post('/devices/:deviceId/control', authMiddleware, async (req: Request, r
       // Log the control action
       await prisma.auditLog.create({
         data: {
-          userId,
+          legacyUserId: userId, // For backward compatibility
           action: 'DEVICE_CONTROL',
           resource: `device:${deviceId}`,
           details: JSON.stringify({ params })
@@ -161,8 +227,28 @@ router.get('/devices/:deviceId/status', authMiddleware, async (req: Request, res
     
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { ewelinkAccessToken: true }
+      select: { 
+        ewelinkAccessToken: true
+      }
     });
+
+    // For legacy users, we need to find their migrated tenant
+    // This is a temporary solution during migration period
+    let userTenantId: string;
+    
+    // Try to find default tenant for legacy users
+    const defaultTenant = await prisma.tenant.findFirst({
+      where: { name: 'Default Tenant' }
+    });
+    
+    if (!defaultTenant) {
+      return res.status(400).json({ 
+        error: 'No tenant found for user. Please complete migration.',
+        code: 'TENANT_NOT_FOUND'
+      });
+    }
+    
+    userTenantId = defaultTenant.id;
     
     if (!user?.ewelinkAccessToken) {
       return res.status(400).json({ 
@@ -199,8 +285,28 @@ router.get('/user', authMiddleware, async (req: Request, res: Response) => {
     
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { ewelinkAccessToken: true }
+      select: { 
+        ewelinkAccessToken: true
+      }
     });
+
+    // For legacy users, we need to find their migrated tenant
+    // This is a temporary solution during migration period
+    let userTenantId: string;
+    
+    // Try to find default tenant for legacy users
+    const defaultTenant = await prisma.tenant.findFirst({
+      where: { name: 'Default Tenant' }
+    });
+    
+    if (!defaultTenant) {
+      return res.status(400).json({ 
+        error: 'No tenant found for user. Please complete migration.',
+        code: 'TENANT_NOT_FOUND'
+      });
+    }
+    
+    userTenantId = defaultTenant.id;
     
     if (!user?.ewelinkAccessToken) {
       return res.status(400).json({ 

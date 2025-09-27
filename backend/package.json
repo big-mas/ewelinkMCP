@@ -1,7 +1,7 @@
 {
   "name": "ewelink-mcp-backend",
   "version": "1.0.0",
-  "description": "eWeLink MCP Server Backend",
+  "description": "eWeLink MCP Server Backend - Multitenant Architecture",
   "main": "dist/app.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/app.ts",
@@ -11,7 +11,12 @@
     "test:watch": "jest --watch",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "prisma:migrate": "prisma migrate dev",
+    "seed:global-admin": "ts-node src/scripts/seedGlobalAdmin.ts",
+    "migrate:existing-data": "ts-node src/scripts/migrateExistingData.ts",
+    "migrate:users-to-tenants": "ts-node src/scripts/migrateUsersToTenants.ts",
+    "setup:multitenant": "npm run prisma:generate && npm run prisma:push && npm run seed:global-admin && npm run migrate:existing-data && npm run migrate:users-to-tenants"
   },
   "dependencies": {
     "@prisma/client": "^5.6.0",
@@ -35,6 +40,7 @@
     "@types/jest": "^29.5.7",
     "typescript": "^5.2.2",
     "ts-node-dev": "^2.0.0",
+    "ts-node": "^10.9.1",
     "jest": "^29.7.0",
     "ts-jest": "^29.1.1",
     "prisma": "^5.6.0"
