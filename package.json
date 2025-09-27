@@ -1,0 +1,27 @@
+{
+  "name": "ewelink-mcp",
+  "version": "1.0.0",
+  "description": "eWeLink MCP Server - A Model Context Protocol server for eWeLink smart home devices",
+  "main": "backend/dist/app.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "start": "cd backend && npm start",
+    "test": "cd backend && npm test",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "setup": "npm run install:all && cd backend && npx prisma generate && npx prisma db push"
+  },
+  "keywords": ["mcp", "ewelink", "smart-home", "typescript", "nodejs"],
+  "author": "eWeLink MCP Team",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
