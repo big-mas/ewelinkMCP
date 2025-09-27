@@ -21,7 +21,7 @@ export const auditMiddleware = async (req: AuthenticatedRequest, res: Response, 
   const originalEnd = res.end;
   
   // Override end function to capture response
-  res.end = function(chunk?: any, encoding?: any) {
+  res.end = function(chunk?: any, encoding?: any): any {
     // Only audit successful requests with authenticated users
     if (req.user && res.statusCode < 400) {
       // Async audit logging (don't block response)
