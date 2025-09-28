@@ -17,7 +17,9 @@ import {
   BarChart3,
   Link,
   Copy,
-  ExternalLink
+  ExternalLink,
+  Pause,
+  Play
 } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card';
@@ -141,15 +143,21 @@ function App() {
   // Global Admin Functions
   const loadGlobalAdminData = async () => {
     try {
-      const [tenantsRes, statsRes] = await Promise.all([
+      const [tenantsResponse, statsResponse, usersResponse, userStatsResponse] = await Promise.all([
         axios.get('/api/global-admin/tenants'),
-        axios.get('/api/global-admin/stats').catch(() => ({ data: {} }))
+        axios.get('/api/global-admin/stats'),
+        axios.get('/api/global-admin/users'),
+        axios.get('/api/global-admin/users/stats')
       ]);
-      
-      setTenants(tenantsRes.data.tenants || []);
-      setStats(statsRes.data || {});
+
+      setGlobalAdminData({
+        tenants: tenantsResponse.data.tenants || [],
+        stats: statsResponse.data || {},
+        users: usersResponse.data.users || [],
+        userStats: userStatsResponse.data || {}
+      });
     } catch (error) {
-      console.error('Failed to load global admin data:', error);
+      setError('Failed to load admin data');
     }
   };
 
@@ -184,6 +192,78 @@ function App() {
       loadGlobalAdminData();
     } catch (error) {
       setError(error.response?.data?.error || 'Failed to suspend tenant');
+    }
+  };
+
+  const pauseTenant = async (tenantId) => {
+    try {
+      await axios.put(`/api/global-admin/tenants/${tenantId}/pause`);
+      setSuccess('Tenant paused successfully');
+      loadGlobalAdminData();
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to pause tenant');
+    }
+  };
+
+  const resumeTenant = async (tenantId) => {
+    try {
+      await axios.put(`/api/global-admin/tenants/${tenantId}/resume`);
+      setSuccess('Tenant resumed successfully');
+      loadGlobalAdminData();
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to resume tenant');
+    }
+  };
+
+  const viewCallbackUrl = async (tenantId) => {
+    try {
+      const response = await axios.get(`/api/global-admin/tenants/${tenantId}/oauth-callback-url`);
+      const { callbackUrl, friendlyCallbackUrl, tenantName, instructions } = response.data;
+      
+      // Create a modal or alert with the callback URL information
+      const message = `
+OAuth Callback URL for ${tenantName}:
+
+Primary URL: ${callbackUrl}
+Friendly URL: ${friendlyCallbackUrl}
+
+Instructions:
+${instructions.steps.join('\n')}
+
+The URL has been copied to your clipboard.
+      `;
+      
+      // Copy to clipboard
+      navigator.clipboard.writeText(callbackUrl);
+      
+      alert(message);
+      setSuccess('Callback URL copied to clipboard');
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to get callback URL');
+    }
+  };
+
+  const updateUserStatus = async (userId, userType, status) => {
+    try {
+      await axios.put(`/api/global-admin/users/${userId}/${userType}/status`, { status });
+      setSuccess(`User ${status.toLowerCase()} successfully`);
+      loadGlobalAdminData();
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to update user status');
+    }
+  };
+
+  const deleteUser = async (userId, userType) => {
+    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      await axios.delete(`/api/global-admin/users/${userId}/${userType}`);
+      setSuccess('User deleted successfully');
+      loadGlobalAdminData();
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to delete user');
     }
   };
 
@@ -578,7 +658,16 @@ function App() {
                               {formatDate(tenant.createdAt)}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                              {tenant.status === 'pending' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => viewCallbackUrl(tenant.id)}
+                                className="border-blue-500 text-blue-600 hover:bg-blue-50"
+                              >
+                                <Link className="h-4 w-4 mr-1" />
+                                Callback URL
+                              </Button>
+                              {tenant.status === 'PENDING' && (
                                 <Button
                                   size="sm"
                                   onClick={() => approveTenant(tenant.id)}
@@ -588,14 +677,55 @@ function App() {
                                   Approve
                                 </Button>
                               )}
-                              {tenant.status === 'active' && (
+                              {tenant.status === 'APPROVED' && (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => pauseTenant(tenant.id)}
+                                    className="border-orange-500 text-orange-600 hover:bg-orange-50"
+                                  >
+                                    <Pause className="h-4 w-4 mr-1" />
+                                    Pause
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => suspendTenant(tenant.id)}
+                                  >
+                                    <XCircle className="h-4 w-4 mr-1" />
+                                    Suspend
+                                  </Button>
+                                </>
+                              )}
+                              {tenant.status === 'PAUSED' && (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => resumeTenant(tenant.id)}
+                                    className="bg-blue-600 hover:bg-blue-700"
+                                  >
+                                    <Play className="h-4 w-4 mr-1" />
+                                    Resume
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => suspendTenant(tenant.id)}
+                                  >
+                                    <XCircle className="h-4 w-4 mr-1" />
+                                    Suspend
+                                  </Button>
+                                </>
+                              )}
+                              {tenant.status === 'SUSPENDED' && (
                                 <Button
                                   size="sm"
-                                  variant="destructive"
-                                  onClick={() => suspendTenant(tenant.id)}
+                                  onClick={() => resumeTenant(tenant.id)}
+                                  className="bg-blue-600 hover:bg-blue-700"
                                 >
-                                  <XCircle className="h-4 w-4 mr-1" />
-                                  Suspend
+                                  <Play className="h-4 w-4 mr-1" />
+                                  Reactivate
                                 </Button>
                               )}
                             </td>
@@ -609,14 +739,208 @@ function App() {
             </TabsContent>
 
             <TabsContent value="users" className="space-y-6">
-              <h2 className="text-2xl font-bold">User Management</h2>
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold">User Management</h2>
+                <div className="flex space-x-2">
+                  <Button variant="outline" onClick={loadGlobalAdminData}>
+                    <Activity className="h-4 w-4 mr-2" />
+                    Refresh
+                  </Button>
+                </div>
+              </div>
+
+              {/* User Statistics Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center">
+                      <Shield className="h-8 w-8 text-purple-600" />
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-gray-500">Global Admins</p>
+                        <p className="text-2xl font-bold text-gray-900">
+                          {globalAdminData.userStats?.byRole?.globalAdmins?.active || 0}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {globalAdminData.userStats?.byRole?.globalAdmins?.total || 0} total
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center">
+                      <Building2 className="h-8 w-8 text-blue-600" />
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-gray-500">Tenant Admins</p>
+                        <p className="text-2xl font-bold text-gray-900">
+                          {globalAdminData.userStats?.byRole?.tenantAdmins?.active || 0}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {globalAdminData.userStats?.byRole?.tenantAdmins?.total || 0} total
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center">
+                      <Users className="h-8 w-8 text-green-600" />
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-gray-500">Tenant Users</p>
+                        <p className="text-2xl font-bold text-gray-900">
+                          {globalAdminData.userStats?.byRole?.tenantUsers?.active || 0}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {globalAdminData.userStats?.byRole?.tenantUsers?.total || 0} total
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center">
+                      <BarChart3 className="h-8 w-8 text-orange-600" />
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-gray-500">Total Active</p>
+                        <p className="text-2xl font-bold text-gray-900">
+                          {globalAdminData.userStats?.active || 0}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {globalAdminData.userStats?.total || 0} total users
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Users Table */}
               <Card>
                 <CardHeader>
                   <CardTitle>All Users</CardTitle>
-                  <CardDescription>Manage users across all tenants</CardDescription>
+                  <CardDescription>Manage users across all tenants and roles</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-gray-500">User management interface coming soon...</p>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            User
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Role
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Tenant
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Last Active
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {globalAdminData.users?.map((user) => (
+                          <tr key={`${user.role}-${user.id}`} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center">
+                                <div className="flex-shrink-0 h-10 w-10">
+                                  <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
+                                    <Users className="h-5 w-5 text-gray-600" />
+                                  </div>
+                                </div>
+                                <div className="ml-4">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    {user.name || 'Unnamed User'}
+                                  </div>
+                                  <div className="text-sm text-gray-500">{user.email}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={cn(
+                                "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
+                                user.role === 'Global Admin' ? "bg-purple-100 text-purple-800" :
+                                user.role === 'Tenant Admin' ? "bg-blue-100 text-blue-800" :
+                                "bg-green-100 text-green-800"
+                              )}>
+                                {user.role}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {user.tenantName}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={cn(
+                                "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
+                                formatStatus(user.status).color
+                              )}>
+                                {formatStatus(user.status).label}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {user.lastActive ? formatDate(user.lastActive) : 'Never'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                              {user.status === 'ACTIVE' && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => updateUserStatus(user.id, user.role.toLowerCase().replace(' ', '_'), 'SUSPENDED')}
+                                  className="border-orange-500 text-orange-600 hover:bg-orange-50"
+                                >
+                                  <Pause className="h-4 w-4 mr-1" />
+                                  Suspend
+                                </Button>
+                              )}
+                              {user.status === 'SUSPENDED' && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => updateUserStatus(user.id, user.role.toLowerCase().replace(' ', '_'), 'ACTIVE')}
+                                  className="bg-green-600 hover:bg-green-700"
+                                >
+                                  <Play className="h-4 w-4 mr-1" />
+                                  Activate
+                                </Button>
+                              )}
+                              {user.role !== 'Global Admin' && (
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => deleteUser(user.id, user.role.toLowerCase().replace(' ', '_'))}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-1" />
+                                  Delete
+                                </Button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {(!globalAdminData.users || globalAdminData.users.length === 0) && (
+                    <div className="text-center py-12">
+                      <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No users found</h3>
+                      <p className="text-gray-500">
+                        Users will appear here as tenants are created and users are added.
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -1081,6 +1405,19 @@ function CreateTenantForm({ onSubmit, loading }) {
           onChange={(e) => setFormData({ ...formData, ewelinkClientSecret: e.target.value })}
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
+      </div>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+        <h4 className="text-sm font-medium text-blue-900 mb-2">OAuth Callback URL</h4>
+        <p className="text-xs text-blue-700 mb-2">
+          Use this URL as the Redirect URI in your eWeLink OAuth app configuration:
+        </p>
+        <div className="bg-white border rounded px-3 py-2 text-sm font-mono text-gray-800">
+          {window.location.origin}/api/oauth/callback/[tenant-id]
+        </div>
+        <p className="text-xs text-blue-600 mt-2">
+          The actual URL will be generated after tenant creation and displayed in the tenant management interface.
+        </p>
       </div>
 
       <DialogFooter>
