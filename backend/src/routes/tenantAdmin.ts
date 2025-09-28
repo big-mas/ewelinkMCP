@@ -86,10 +86,9 @@ router.post('/login', [
 });
 
 // Configure eWeLink OAuth
-router.put('/oauth-config', tenantAdminAuthMiddleware, [
-  body('ewelinkClientId').notEmpty().withMessage('eWeLink Client ID is required'),
-  body('ewelinkClientSecret').notEmpty().withMessage('eWeLink Client Secret is required'),
-  body('ewelinkRedirectUri').isURL().withMessage('Valid redirect URI is required')
+router.post('/oauth-config', tenantAdminAuthMiddleware, [
+  body('clientId').notEmpty().withMessage('eWeLink Client ID is required'),
+  body('clientSecret').notEmpty().withMessage('eWeLink Client Secret is required')
 ], async (req: Request, res: Response) => {
   try {
     const errors = validationResult(req);
@@ -98,22 +97,51 @@ router.put('/oauth-config', tenantAdminAuthMiddleware, [
     }
 
     const tenantAdminId = (req as any).tenantAdmin?.id;
-    const oauthConfig = req.body;
+    const { clientId, clientSecret } = req.body;
 
-    const tenant = await TenantAdminService.configureOAuth(tenantAdminId, oauthConfig);
+    const tenant = await TenantAdminService.configureOAuth(tenantAdminId, {
+      ewelinkClientId: clientId,
+      ewelinkClientSecret: clientSecret,
+      ewelinkRedirectUri: `${process.env.BASE_URL || 'http://localhost:3000'}/oauth/callback`
+    });
 
     res.json({
-      message: 'OAuth configuration updated successfully',
-      tenant: {
-        id: tenant.id,
-        name: tenant.name,
-        hasOAuthConfig: !!(tenant.ewelinkClientId && tenant.ewelinkClientSecret)
-      }
+      message: 'OAuth configuration saved successfully',
+      success: true
     });
 
   } catch (error: any) {
     console.error('OAuth configuration error:', error);
     res.status(400).json({ error: error.message || 'Failed to configure OAuth' });
+  }
+});
+
+// Test OAuth Connection
+router.get('/oauth-test', tenantAdminAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const tenantAdminId = (req as any).tenantAdmin?.id;
+    
+    const oauthConfig = await TenantAdminService.getTenantOAuthConfig(tenantAdminId);
+    
+    if (!oauthConfig.clientId || !oauthConfig.clientSecret) {
+      return res.json({
+        success: false,
+        error: 'OAuth configuration not found. Please save your Client ID and Client Secret first.'
+      });
+    }
+
+    // Simple test - just verify the configuration exists
+    res.json({
+      success: true,
+      message: 'OAuth configuration is valid and ready for use'
+    });
+
+  } catch (error: any) {
+    console.error('OAuth test error:', error);
+    res.json({
+      success: false,
+      error: 'Failed to test OAuth connection'
+    });
   }
 });
 

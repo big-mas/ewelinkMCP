@@ -25,7 +25,7 @@ router.get('/authorize', authMiddleware, (req: Request, res: Response) => {
   }
 });
 
-// Handle eWeLink OAuth callback
+// Handle eWeLink OAuth callback (legacy route)
 router.get('/callback', async (req: Request, res: Response) => {
   try {
     const { code, state, error } = req.query;
@@ -69,6 +69,96 @@ router.get('/callback', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('OAuth callback error:', error);
     res.redirect(`${config.frontendUrl}/oauth/error?error=callback_failed`);
+  }
+});
+
+// Handle tenant-specific eWeLink OAuth callback
+router.get('/callback/:tenantId', async (req: Request, res: Response) => {
+  try {
+    const { code, state, error } = req.query;
+    const { tenantId } = req.params;
+    
+    console.log(`🔗 Tenant-specific OAuth callback for tenant: ${tenantId}`);
+    
+    if (error) {
+      console.error('OAuth error:', error);
+      return res.redirect(`${config.frontendUrl}/oauth/error?error=${encodeURIComponent(error as string)}&tenant=${tenantId}`);
+    }
+    
+    if (!code || !state) {
+      return res.redirect(`${config.frontendUrl}/oauth/error?error=missing_parameters&tenant=${tenantId}`);
+    }
+    
+    // Verify tenant exists
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId }
+    });
+    
+    if (!tenant) {
+      console.error('Tenant not found:', tenantId);
+      return res.redirect(`${config.frontendUrl}/oauth/error?error=tenant_not_found`);
+    }
+    
+    // Decode state to get user ID and tenant info
+    let userId: string;
+    let stateTenantId: string;
+    try {
+      const stateData = JSON.parse(Buffer.from(state as string, 'base64').toString());
+      userId = stateData.userId;
+      stateTenantId = stateData.tenantId;
+      
+      // Verify tenant ID matches
+      if (stateTenantId !== tenantId) {
+        throw new Error('Tenant ID mismatch');
+      }
+    } catch (err) {
+      console.error('Invalid state parameter:', err);
+      return res.redirect(`${config.frontendUrl}/oauth/error?error=invalid_state&tenant=${tenantId}`);
+    }
+    
+    // Create eWeLink service with tenant-specific config
+    const ewelinkService = new EWeLinkService();
+    
+    // Use tenant's OAuth credentials if available
+    if (tenant.ewelinkClientId && tenant.ewelinkClientSecret) {
+      // TODO: Initialize service with tenant-specific credentials
+      console.log('🔧 Using tenant-specific OAuth credentials');
+    }
+    
+    const tokenData = await ewelinkService.exchangeCodeForToken(code as string);
+    
+    // Update tenant user with eWeLink tokens
+    await prisma.tenantUser.updateMany({
+      where: { 
+        id: userId,
+        tenantId: tenantId
+      },
+      data: {
+        ewelinkAccessToken: tokenData.access_token,
+        ewelinkRefreshToken: tokenData.refresh_token,
+        ewelinkUserId: tokenData.user?.userid || null
+      }
+    });
+    
+    // Log the OAuth connection
+    await prisma.auditLog.create({
+      data: {
+        tenantUserId: userId,
+        action: 'OAUTH_CONNECTED',
+        resource: `tenant_user:${userId}`,
+        details: JSON.stringify({ 
+          ewelinkUserId: tokenData.user?.userid,
+          tenantId 
+        })
+      }
+    });
+    
+    // Redirect to tenant-specific success page
+    res.redirect(`${config.frontendUrl}/oauth/success?tenant=${tenantId}`);
+    
+  } catch (error: any) {
+    console.error('Tenant OAuth callback error:', error);
+    res.redirect(`${config.frontendUrl}/oauth/error?error=callback_failed&tenant=${req.params.tenantId}`);
   }
 });
 

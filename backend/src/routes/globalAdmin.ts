@@ -172,6 +172,52 @@ router.put('/tenants/:id/suspend', globalAdminAuthMiddleware, async (req: Reques
   }
 });
 
+// Pause Tenant
+router.put('/tenants/:id/pause', globalAdminAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const globalAdminId = (req as any).globalAdmin?.id;
+    const tenantId = req.params.id;
+
+    const tenant = await GlobalAdminService.pauseTenant(globalAdminId, tenantId);
+
+    res.json({
+      message: 'Tenant paused successfully',
+      tenant: {
+        id: tenant.id,
+        name: tenant.name,
+        status: tenant.status
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Pause tenant error:', error);
+    res.status(400).json({ error: error.message || 'Failed to pause tenant' });
+  }
+});
+
+// Resume Tenant
+router.put('/tenants/:id/resume', globalAdminAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const globalAdminId = (req as any).globalAdmin?.id;
+    const tenantId = req.params.id;
+
+    const tenant = await GlobalAdminService.resumeTenant(globalAdminId, tenantId);
+
+    res.json({
+      message: 'Tenant resumed successfully',
+      tenant: {
+        id: tenant.id,
+        name: tenant.name,
+        status: tenant.status
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Resume tenant error:', error);
+    res.status(400).json({ error: error.message || 'Failed to resume tenant' });
+  }
+});
+
 // Get Global Admin Profile
 router.get('/profile', globalAdminAuthMiddleware, async (req: Request, res: Response) => {
   try {
@@ -197,6 +243,146 @@ router.get('/profile', globalAdminAuthMiddleware, async (req: Request, res: Resp
   } catch (error: any) {
     console.error('Get global admin profile error:', error);
     res.status(500).json({ error: 'Failed to get profile' });
+  }
+});
+
+// Get tenant OAuth callback URL
+router.get('/tenants/:id/oauth-callback-url', globalAdminAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const tenantId = req.params.id;
+    const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+    
+    // Verify tenant exists
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { id: true, name: true, domain: true }
+    });
+
+    if (!tenant) {
+      return res.status(404).json({ error: 'Tenant not found' });
+    }
+
+    // Generate tenant-specific callback URL
+    const callbackUrl = `${baseUrl}/api/oauth/callback/${tenantId}`;
+    
+    // Generate a friendly slug from tenant name or domain
+    const slug = (tenant.domain || tenant.name)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+    
+    const friendlyCallbackUrl = `${baseUrl}/api/oauth/callback/${slug}`;
+
+    res.json({
+      tenantId,
+      tenantName: tenant.name,
+      callbackUrl,
+      friendlyCallbackUrl,
+      instructions: {
+        title: 'eWeLink OAuth App Configuration',
+        steps: [
+          '1. Go to https://dev.ewelink.cc/oauth-apps',
+          '2. Create a new OAuth app or edit existing one',
+          '3. Set the Redirect URI to the callback URL below',
+          '4. Copy the Client ID and Client Secret to your tenant configuration'
+        ]
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Get tenant OAuth callback URL error:', error);
+    res.status(500).json({ error: 'Failed to generate callback URL' });
+  }
+});
+
+// Get all users
+router.get('/users', globalAdminAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const globalAdminId = (req as any).globalAdmin?.id;
+    const users = await GlobalAdminService.getAllUsers(globalAdminId);
+
+    res.json({
+      users,
+      total: users.length
+    });
+
+  } catch (error: any) {
+    console.error('Get all users error:', error);
+    res.status(500).json({ error: 'Failed to get users' });
+  }
+});
+
+// Get user statistics
+router.get('/users/stats', globalAdminAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const stats = await GlobalAdminService.getUserStats();
+
+    res.json(stats);
+
+  } catch (error: any) {
+    console.error('Get user stats error:', error);
+    res.status(500).json({ error: 'Failed to get user statistics' });
+  }
+});
+
+// Get user by ID
+router.get('/users/:id/:type', globalAdminAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { id, type } = req.params;
+    const user = await GlobalAdminService.getUserById(id, type);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ user });
+
+  } catch (error: any) {
+    console.error('Get user by ID error:', error);
+    res.status(500).json({ error: 'Failed to get user' });
+  }
+});
+
+// Update user status
+router.put('/users/:id/:type/status', globalAdminAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const globalAdminId = (req as any).globalAdmin?.id;
+    const { id, type } = req.params;
+    const { status } = req.body;
+
+    if (!status || !['ACTIVE', 'SUSPENDED', 'PENDING'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    const updatedUser = await GlobalAdminService.updateUserStatus(globalAdminId, id, type, status);
+
+    res.json({
+      message: 'User status updated successfully',
+      user: updatedUser
+    });
+
+  } catch (error: any) {
+    console.error('Update user status error:', error);
+    res.status(400).json({ error: error.message || 'Failed to update user status' });
+  }
+});
+
+// Delete user
+router.delete('/users/:id/:type', globalAdminAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const globalAdminId = (req as any).globalAdmin?.id;
+    const { id, type } = req.params;
+
+    await GlobalAdminService.deleteUser(globalAdminId, id, type);
+
+    res.json({
+      message: 'User deleted successfully'
+    });
+
+  } catch (error: any) {
+    console.error('Delete user error:', error);
+    res.status(400).json({ error: error.message || 'Failed to delete user' });
   }
 });
 
