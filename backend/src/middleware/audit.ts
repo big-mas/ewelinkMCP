@@ -23,7 +23,8 @@ export const auditMiddleware = async (req: AuthenticatedRequest, res: Response, 
   // Override end function to capture response
   res.end = function(chunk?: any, encoding?: any): any {
     // Only audit successful requests with authenticated users
-    if (req.user && res.statusCode < 400) {
+    const hasUser = req.user || (req as any).globalAdmin || (req as any).tenantAdmin || (req as any).tenantUser;
+    if (hasUser && res.statusCode < 400) {
       // Async audit logging (don't block response)
       setImmediate(async () => {
         try {
@@ -38,13 +39,25 @@ export const auditMiddleware = async (req: AuthenticatedRequest, res: Response, 
             ip: req.ip || req.connection.remoteAddress
           };
           
+          // Determine which user type is making the request
+          const auditData: any = {
+            action,
+            resource,
+            details: JSON.stringify(details)
+          };
+
+          if ((req as any).globalAdmin) {
+            auditData.globalAdminId = (req as any).globalAdmin.id;
+          } else if ((req as any).tenantAdmin) {
+            auditData.tenantAdminId = (req as any).tenantAdmin.id;
+          } else if ((req as any).tenantUser) {
+            auditData.tenantUserId = (req as any).tenantUser.id;
+          } else if (req.user) {
+            auditData.legacyUserId = req.user.id; // For backward compatibility
+          }
+
           await prisma.auditLog.create({
-            data: {
-              userId: req.user!.id,
-              action,
-              resource,
-              details: JSON.stringify(details)
-            }
+            data: auditData
           });
         } catch (error) {
           console.error('Audit logging error:', error);
@@ -53,8 +66,8 @@ export const auditMiddleware = async (req: AuthenticatedRequest, res: Response, 
       });
     }
     
-    // Call original end function
-    originalEnd.call(this, chunk, encoding);
+    // Call original end function and return its result
+    return originalEnd.call(this, chunk, encoding);
   };
   
   next();
