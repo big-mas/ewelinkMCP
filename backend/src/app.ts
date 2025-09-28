@@ -8,6 +8,7 @@ import { authRoutes } from './routes/auth';
 import { mcpRoutes } from './routes/mcp';
 import { oauthRoutes } from './routes/oauth';
 import { tenantRoutes } from './routes/tenant';
+import { globalAdminRoutes } from './routes/globalAdmin';
 import { auditMiddleware } from './middleware/audit';
 
 const app = express();
@@ -48,15 +49,26 @@ app.use('/api/auth', authRoutes);
 app.use('/api/mcp', mcpRoutes);
 app.use('/api/oauth', oauthRoutes);
 app.use('/api/tenant', tenantRoutes);
+app.use('/api/global-admin', globalAdminRoutes);
 
-// Serve frontend static files in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../public')));
+// Serve frontend static files
+app.use(express.static(path.join(__dirname, '../public')));
+
+// Serve frontend for all non-API routes
+app.get('*', (req, res, next) => {
+  // Skip API routes
+  if (req.path.startsWith('/api/')) {
+    return next();
+  }
   
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../public/index.html'));
+  const indexPath = path.join(__dirname, '../public/index.html');
+  res.sendFile(indexPath, (err) => {
+    if (err) {
+      console.error('Error serving index.html:', err);
+      next();
+    }
   });
-}
+});
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
