@@ -37,6 +37,9 @@ app.use(express.urlencoded({ extended: true }));
 // Audit middleware
 app.use(auditMiddleware);
 
+// Serve static files from the React app build
+app.use(express.static(path.join(__dirname, '../public')));
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ 
@@ -89,9 +92,14 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   });
 });
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ error: 'Route not found' });
+// Catch-all handler: send back React's index.html file for client-side routing
+app.get('*', (req, res) => {
+  // Only serve index.html for non-API routes
+  if (!req.path.startsWith('/api/')) {
+    res.sendFile(path.join(__dirname, '../public/index.html'));
+  } else {
+    res.status(404).json({ error: 'API route not found' });
+  }
 });
 
 const PORT = config.port || 3000;
