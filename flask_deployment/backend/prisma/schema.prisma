@@ -1,0 +1,189 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Global Admin - can manage all tenants and be MCP users
+model GlobalAdmin {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String   // hashed
+  name      String?
+  status    String   @default("ACTIVE") // ACTIVE, SUSPENDED, PENDING
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // MCP session tracking
+  mcpSessionId String?
+  lastActive   DateTime?
+  
+  // eWeLink OAuth tokens (Global Admins can also use MCP)
+  ewelinkAccessToken  String?
+  ewelinkRefreshToken String?
+  ewelinkUserId       String?
+  
+  // Audit logs
+  auditLogs AuditLog[]
+  
+  @@map("global_admins")
+}
+
+// Tenant - represents a company/organization
+model Tenant {
+  id          String   @id @default(cuid())
+  name        String
+  domain      String?  @unique
+  status      String   @default("PENDING") // PENDING, APPROVED, SUSPENDED, DELETED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // eWeLink OAuth Configuration per tenant (encrypted)
+  ewelinkClientId     String?
+  ewelinkClientSecret String? // encrypted with AES-256
+  ewelinkRedirectUri  String?
+  
+  // Relationships
+  admins      TenantAdmin[]
+  users       TenantUser[]
+  devices     Device[]
+  
+  // Approval tracking
+  approvedBy  String?  // GlobalAdmin ID
+  approvedAt  DateTime?
+  
+  @@map("tenants")
+}
+
+// Tenant Admin - can manage their tenant and be MCP users
+model TenantAdmin {
+  id        String   @id @default(cuid())
+  email     String   
+  password  String   // hashed
+  name      String?
+  tenantId  String
+  status    String   @default("PENDING") // PENDING, ACTIVE, SUSPENDED, DELETED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // MCP session tracking
+  mcpSessionId String?
+  lastActive   DateTime?
+  
+  // eWeLink OAuth tokens (Tenant Admins can also use MCP)
+  ewelinkAccessToken  String?
+  ewelinkRefreshToken String?
+  ewelinkUserId       String?
+  
+  // Relationships
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  auditLogs AuditLog[]
+  
+  @@unique([email, tenantId])
+  @@map("tenant_admins")
+}
+
+// Tenant User - regular users within a tenant
+model TenantUser {
+  id               String   @id @default(cuid())
+  email            String   
+  name             String?
+  tenantId         String
+  status           String   @default("ACTIVE") // PENDING, ACTIVE, SUSPENDED, DELETED
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  // MCP session tracking
+  mcpSessionId     String?
+  lastActive       DateTime?
+  
+  // eWeLink OAuth tokens (encrypted)
+  ewelinkAccessToken  String?
+  ewelinkRefreshToken String?
+  ewelinkUserId       String?
+  
+  // Relationships
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  auditLogs AuditLog[]
+  
+  @@unique([email, tenantId])
+  @@map("tenant_users")
+}
+
+// Legacy User model - for data migration
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  role      String   @default("user")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // eWeLink OAuth tokens
+  ewelinkAccessToken  String?
+  ewelinkRefreshToken String?
+  ewelinkUserId       String?
+  
+  // Migration tracking
+  migratedToTenantUserId String?
+  migrationCompleted     Boolean @default(false)
+  
+  // Audit logs
+  auditLogs AuditLog[]
+  
+  @@map("users")
+}
+
+// Enhanced Audit Log - supports all user types
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  resource  String
+  details   String?
+  timestamp DateTime @default(now())
+  
+  // User identification (one of these will be set)
+  globalAdminId String?
+  tenantAdminId String?
+  tenantUserId  String?
+  legacyUserId  String?  // For legacy users during migration
+  
+  // Relationships
+  globalAdmin GlobalAdmin? @relation(fields: [globalAdminId], references: [id], onDelete: Cascade)
+  tenantAdmin TenantAdmin? @relation(fields: [tenantAdminId], references: [id], onDelete: Cascade)
+  tenantUser  TenantUser?  @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
+  legacyUser  User?        @relation(fields: [legacyUserId], references: [id], onDelete: Cascade)
+  
+  @@map("audit_logs")
+}
+
+// Enhanced Device model - tenant-scoped
+model Device {
+  id          String   @id @default(cuid())
+  deviceId    String   // eWeLink device ID (not unique globally, but unique per tenant)
+  name        String
+  type        String
+  model       String?
+  online      Boolean  @default(false)
+  params      String   // JSON string of device parameters
+  capabilities String  // JSON string of device capabilities
+  tenantId    String   // Associate devices with tenants
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relationships
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  @@unique([deviceId, tenantId]) // Device ID unique per tenant
+  @@map("devices")
+}
+
+// Status values are stored as strings:
+// TenantStatus: "PENDING" | "APPROVED" | "SUSPENDED" | "DELETED"
+// UserStatus: "PENDING" | "ACTIVE" | "SUSPENDED" | "DELETED"
