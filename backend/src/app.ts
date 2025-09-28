@@ -9,6 +9,8 @@ import { mcpRoutes } from './routes/mcp';
 import { oauthRoutes } from './routes/oauth';
 import { tenantRoutes } from './routes/tenant';
 import { globalAdminRoutes } from './routes/globalAdmin';
+import { tenantAdminRoutes } from './routes/tenantAdmin';
+import { tenantUserRoutes } from './routes/tenantUser';
 import { auditMiddleware } from './middleware/audit';
 
 const app = express();
@@ -50,6 +52,8 @@ app.use('/api/mcp', mcpRoutes);
 app.use('/api/oauth', oauthRoutes);
 app.use('/api/tenant', tenantRoutes);
 app.use('/api/global-admin', globalAdminRoutes);
+app.use('/api/tenant-admin', tenantAdminRoutes);
+app.use('/api/tenant-user', tenantUserRoutes);
 
 // Serve frontend static files
 app.use(express.static(path.join(__dirname, '../public')));

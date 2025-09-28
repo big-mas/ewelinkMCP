@@ -26,8 +26,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { cn, formatDate, formatStatus } from './lib/utils';
 import './App.css';
 
-// Configure axios defaults
-axios.defaults.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// Configure axios defaults - use relative URL to leverage Vite proxy
+axios.defaults.baseURL = import.meta.env.VITE_API_URL || '';
 
 function App() {
   const [user, setUser] = useState(null);
