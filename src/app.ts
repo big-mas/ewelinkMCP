@@ -112,10 +112,11 @@ app.get('*', (req, res) => {
 const PORT = config.port || 3000;
 
 if (require.main === module) {
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 eWeLink MCP Server running on port ${PORT}`);
     console.log(`📱 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
     console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🌐 Server accessible at: http://0.0.0.0:${PORT}`);
   });
 }
 

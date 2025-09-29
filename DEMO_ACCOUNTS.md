@@ -1,6 +1,6 @@
 # eWeLink MCP Server - Demo Accounts
 
-**Deployment URL**: https://3000-ihzbw8oixt6l3ewk6lu86-be9e2a56.manusvm.computer
+**Deployment URL**: https://3000-io9xpi5k1rmrrqko1ak5x-be9e2a56.manusvm.computer
 
 ## 🎯 **Live Demo Application**
 
@@ -79,7 +79,7 @@ The eWeLink MCP Server is now deployed and accessible at the URL above. The appl
 ## 🚀 **How to Test the Application**
 
 ### **Step 1: Access the Application**
-Navigate to: https://3000-ihzbw8oixt6l3ewk6lu86-be9e2a56.manusvm.computer
+Navigate to: https://3000-io9xpi5k1rmrrqko1ak5x-be9e2a56.manusvm.computer
 
 ### **Step 2: Select User Type**
 Use the dropdown to select the user type you want to test:
