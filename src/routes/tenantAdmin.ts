@@ -99,6 +99,12 @@ router.post('/oauth-config', tenantAdminAuthMiddleware, [
     const tenantAdminId = (req as any).tenantAdmin?.id;
     const { clientId, clientSecret } = req.body;
 
+    if (!tenantAdminId) {
+      return res.status(401).json({ error: 'Tenant admin authentication required' });
+    }
+
+    console.log('OAuth config request:', { tenantAdminId, clientId: clientId ? 'provided' : 'missing' });
+
     const tenant = await TenantAdminService.configureOAuth(tenantAdminId, {
       ewelinkClientId: clientId,
       ewelinkClientSecret: clientSecret,

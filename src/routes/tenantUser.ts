@@ -64,6 +64,47 @@ router.post('/register', [
   }
 });
 
+// Tenant User Login
+router.post('/login', [
+  body('email').isEmail().normalizeEmail(),
+  body('password').notEmpty().withMessage('Password is required')
+], async (req: Request, res: Response) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { email, password } = req.body;
+
+    const result = await TenantUserService.loginTenantUser(email, password);
+
+    res.json({
+      message: 'Login successful',
+      token: result.token,
+      user: {
+        id: result.user.id,
+        email: result.user.email,
+        name: result.user.name,
+        role: 'tenant_user',
+        status: result.user.status,
+        tenantId: result.user.tenantId,
+        tenant: {
+          id: result.user.tenant.id,
+          name: result.user.tenant.name,
+          domain: result.user.tenant.domain,
+          status: result.user.tenant.status
+        },
+        hasEWeLinkAuth: !!result.user.ewelinkAccessToken
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Tenant user login error:', error);
+    res.status(401).json({ error: error.message || 'Login failed' });
+  }
+});
+
 // Get Tenant User Profile
 router.get('/profile', tenantUserAuthMiddleware, async (req: Request, res: Response) => {
   try {

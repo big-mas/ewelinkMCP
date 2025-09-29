@@ -1,5 +1,6 @@
 import { PrismaClient, TenantUser, Tenant } from '@prisma/client';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
 import { config } from '../utils/config';
 import { hashPassword } from '../utils/encryption';
 
@@ -121,6 +122,55 @@ export class TenantUserService {
         ewelinkUserId,
         lastActive: new Date()
       },
+      include: { tenant: true }
+    });
+
+    // Generate JWT token
+    const payload: TenantUserJWTPayload = {
+      tenantUserId: user.id,
+      email: user.email,
+      tenantId: user.tenantId,
+      role: 'tenant_user'
+    };
+
+    const token = jwt.sign(payload, config.jwtSecret, { expiresIn: '7d' });
+
+    return { user: updatedUser, token };
+  }
+
+  /**
+   * Login tenant user with email and password
+   */
+  static async loginTenantUser(email: string, password: string): Promise<{ user: TenantUser & { tenant: Tenant }, token: string }> {
+    // Find user by email
+    const user = await prisma.tenantUser.findFirst({
+      where: { 
+        email: email.toLowerCase(),
+        status: 'ACTIVE'
+      },
+      include: { tenant: true }
+    });
+
+    if (!user) {
+      throw new Error('Invalid email or password');
+    }
+
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    
+    if (!isValidPassword) {
+      throw new Error('Invalid email or password');
+    }
+
+    // Check if tenant is approved
+    if (user.tenant.status !== 'APPROVED') {
+      throw new Error('Tenant is not approved');
+    }
+
+    // Update last active
+    const updatedUser = await prisma.tenantUser.update({
+      where: { id: user.id },
+      data: { lastActive: new Date() },
       include: { tenant: true }
     });
 
