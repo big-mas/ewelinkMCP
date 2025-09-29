@@ -50,19 +50,23 @@ The eWeLink MCP Server is now deployed and accessible at the URL above. The appl
 
 #### **Demo Company Users**
 - **Email**: `user@demo.company.com`
+- **Password**: `user123`
 - **Name**: Demo User
 - **Tenant**: Demo Company
 
 - **Email**: `john@demo.company.com`
+- **Password**: `john123`
 - **Name**: John Smith
 - **Tenant**: Demo Company
 
 #### **Acme Corporation Users**
 - **Email**: `user@acme.corp.com`
+- **Password**: `user123`
 - **Name**: Acme User
 - **Tenant**: Acme Corporation
 
 - **Email**: `jane@acme.corp.com`
+- **Password**: `jane123`
 - **Name**: Jane Doe
 - **Tenant**: Acme Corporation
 
@@ -71,8 +75,6 @@ The eWeLink MCP Server is now deployed and accessible at the URL above. The appl
 - eWeLink account connection
 - MCP endpoint access for AI integration
 - Profile management and settings
-
-**Note**: Tenant Users use passwordless authentication via tenant admin invitation system.
 
 ---
 

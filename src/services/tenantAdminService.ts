@@ -220,11 +220,16 @@ export class TenantAdminService {
       throw new Error('User already exists in this tenant');
     }
 
+    // Generate a default password for the user
+    const defaultPassword = 'user123'; // Default password for demo purposes
+    const hashedPassword = await hashPassword(defaultPassword);
+
     // Create tenant user
     const user = await prisma.tenantUser.create({
       data: {
         email,
         name,
+        password: hashedPassword,
         tenantId: admin.tenantId,
         status: "ACTIVE"
       }

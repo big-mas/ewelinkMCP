@@ -158,21 +158,25 @@ async function createCompleteDemoData() {
       {
         email: 'user@demo.company.com',
         name: 'Demo User',
+        password: 'user123',
         tenantId: demoTenant.id
       },
       {
         email: 'john@demo.company.com',
         name: 'John Smith',
+        password: 'john123',
         tenantId: demoTenant.id
       },
       {
         email: 'user@acme.corp.com',
         name: 'Acme User',
+        password: 'user123',
         tenantId: acmeTenant.id
       },
       {
         email: 'jane@acme.corp.com',
         name: 'Jane Doe',
+        password: 'jane123',
         tenantId: acmeTenant.id
       }
     ];
@@ -186,10 +190,12 @@ async function createCompleteDemoData() {
       });
 
       if (!user) {
+        const hashedPassword = await hashPassword(userData.password);
         user = await prisma.tenantUser.create({
           data: {
             email: userData.email,
             name: userData.name,
+            password: hashedPassword,
             tenantId: userData.tenantId,
             status: 'ACTIVE' // Set to ACTIVE for immediate use
           }
@@ -264,8 +270,16 @@ async function createCompleteDemoData() {
     console.log('    Callback URL: https://3000-ihzbw8oixt6l3ewk6lu86-be9e2a56.manusvm.computer/oauth/callback/acme\n');
     
     console.log('👤 TENANT USERS:');
-    console.log('  Demo Company: user@demo.company.com, john@demo.company.com');
-    console.log('  Acme Corporation: user@acme.corp.com, jane@acme.corp.com\n');
+    console.log('  Demo Company Users:');
+    console.log('    Email: user@demo.company.com');
+    console.log('    Password: user123');
+    console.log('    Email: john@demo.company.com');
+    console.log('    Password: john123\n');
+    console.log('  Acme Corporation Users:');
+    console.log('    Email: user@acme.corp.com');
+    console.log('    Password: user123');
+    console.log('    Email: jane@acme.corp.com');
+    console.log('    Password: jane123\n');
     
     console.log('✅ All accounts are ACTIVE and ready for use!');
 

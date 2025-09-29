@@ -76,10 +76,12 @@ async function migrateExistingData() {
           console.log(`  ✅ Migrated as Tenant Admin: ${tenantAdmin.id}`);
         } else {
           // Create as Tenant User
+          const hashedPassword = await hashPassword('user123'); // Default password
           const tenantUser = await prisma.tenantUser.create({
             data: {
               email: user.email,
               name: user.email.split('@')[0], // Use email prefix as name
+              password: hashedPassword,
               tenantId: defaultTenant.id,
               status: 'ACTIVE',
               ewelinkAccessToken: user.ewelinkAccessToken,

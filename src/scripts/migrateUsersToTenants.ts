@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { hashPassword } from '../utils/encryption';
 
 const prisma = new PrismaClient();
 
@@ -57,10 +58,12 @@ async function migrateUsersToTenants() {
         }
 
         // Create tenant user from legacy user
+        const hashedPassword = await hashPassword('user123'); // Default password
         const tenantUser = await prisma.tenantUser.create({
           data: {
             email: user.email,
             name: (user as any).name || null, // Handle optional name field
+            password: hashedPassword,
             tenantId: defaultTenant.id,
             status: 'ACTIVE',
             ewelinkAccessToken: user.ewelinkAccessToken,

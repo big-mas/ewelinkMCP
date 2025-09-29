@@ -94,6 +94,7 @@ model TenantUser {
   id               String   @id @default(cuid())
   email            String   
   name             String?
+  password         String   // Hashed password for authentication
   tenantId         String
   status           String   @default("ACTIVE") // PENDING, ACTIVE, SUSPENDED, DELETED
   createdAt        DateTime @default(now())

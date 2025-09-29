@@ -1,6 +1,7 @@
 import { PrismaClient, TenantUser, Tenant } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { config } from '../utils/config';
+import { hashPassword } from '../utils/encryption';
 
 const prisma = new PrismaClient();
 
@@ -49,11 +50,16 @@ export class TenantUserService {
       throw new Error('User already exists in this tenant');
     }
 
-    // Create tenant user (no password needed - OAuth only)
+    // Generate a default password for the user
+    const defaultPassword = 'user123'; // Default password for demo purposes
+    const hashedPassword = await hashPassword(defaultPassword);
+
+    // Create tenant user
     const user = await prisma.tenantUser.create({
       data: {
         email: data.email,
         name: data.name,
+        password: hashedPassword,
         tenantId: tenant.id,
         status: "ACTIVE"
       }
