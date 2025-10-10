@@ -99,16 +99,6 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   });
 });
 
-// Catch-all handler: send back React's index.html file for client-side routing
-app.get('*', (req, res) => {
-  // Only serve index.html for non-API routes
-  if (!req.path.startsWith('/api/')) {
-    res.sendFile(path.join(__dirname, '../public/index.html'));
-  } else {
-    res.status(404).json({ error: 'API route not found' });
-  }
-});
-
 const PORT = config.port || 3000;
 
 if (require.main === module) {

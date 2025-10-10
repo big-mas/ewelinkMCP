@@ -38,7 +38,7 @@ export class EnhancedMCPService {
    * Create a new MCP session
    */
   static createSession(userId: string, userType: 'global_admin' | 'tenant_admin' | 'tenant_user', tenantId?: string): string {
-    const sessionId = `mcp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const sessionId = `mcp_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
     
     const session: MCPSession = {
       id: sessionId,
@@ -624,66 +624,409 @@ export class EnhancedMCPService {
 
   // Additional helper methods would be implemented here...
   private static async executeGetDevice(session: MCPSession, args: any): Promise<ToolCallResponse> {
-    // Implementation for get_device tool
-    return {
-      jsonrpc: '2.0',
-      id: session.id,
-      result: {
-        content: [{ type: 'text', text: 'Not implemented yet' }]
+    try {
+      const { device_id } = args;
+      
+      if (!device_id) {
+        throw new Error('device_id is required');
       }
-    };
+
+      const user = await this.getUserWithTokens(session);
+      if (!user || !user.ewelinkAccessToken) {
+        throw new Error('eWeLink account not connected');
+      }
+
+      const ewelinkService = new EWeLinkService();
+      ewelinkService.setAccessToken(user.ewelinkAccessToken);
+      
+      const device = await ewelinkService.getDevice(device_id);
+
+      if (!device) {
+        throw new Error(`Device ${device_id} not found`);
+      }
+
+      return {
+        jsonrpc: '2.0',
+        id: session.id,
+        result: {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              id: device.deviceid,
+              name: device.name,
+              type: device.type,
+              model: device.model,
+              online: device.online,
+              params: device.params,
+              capabilities: device.capabilities
+            }, null, 2)
+          }]
+        }
+      };
+    } catch (error: any) {
+      return {
+        jsonrpc: '2.0',
+        id: session.id,
+        result: {
+          content: [{
+            type: 'text',
+            text: `Error getting device: ${error.message}`
+          }],
+          isError: true
+        }
+      };
+    }
   }
 
   private static async executeGetDeviceStatus(session: MCPSession, args: any): Promise<ToolCallResponse> {
-    // Implementation for get_device_status tool
-    return {
-      jsonrpc: '2.0',
-      id: session.id,
-      result: {
-        content: [{ type: 'text', text: 'Not implemented yet' }]
+    try {
+      const { device_id } = args;
+      
+      if (!device_id) {
+        throw new Error('device_id is required');
       }
-    };
+
+      const user = await this.getUserWithTokens(session);
+      if (!user || !user.ewelinkAccessToken) {
+        throw new Error('eWeLink account not connected');
+      }
+
+      const ewelinkService = new EWeLinkService();
+      ewelinkService.setAccessToken(user.ewelinkAccessToken);
+      
+      const status = await ewelinkService.getDeviceStatus(device_id);
+
+      if (!status) {
+        throw new Error(`Cannot get status for device ${device_id}`);
+      }
+
+      return {
+        jsonrpc: '2.0',
+        id: session.id,
+        result: {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              device_id,
+              status,
+              timestamp: new Date().toISOString()
+            }, null, 2)
+          }]
+        }
+      };
+    } catch (error: any) {
+      return {
+        jsonrpc: '2.0',
+        id: session.id,
+        result: {
+          content: [{
+            type: 'text',
+            text: `Error getting device status: ${error.message}`
+          }],
+          isError: true
+        }
+      };
+    }
   }
 
   private static async executeListTenants(session: MCPSession, args: any): Promise<ToolCallResponse> {
-    // Implementation for list_tenants tool (Global Admin only)
-    return {
-      jsonrpc: '2.0',
-      id: session.id,
-      result: {
-        content: [{ type: 'text', text: 'Not implemented yet' }]
+    try {
+      // Only global admins can list tenants
+      if (session.userType !== 'global_admin') {
+        throw new Error('Only global admins can list tenants');
       }
-    };
+
+      const statusFilter = args?.status;
+
+      const where: any = {};
+      if (statusFilter) {
+        where.status = statusFilter;
+      }
+
+      const tenants = await prisma.tenant.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          domain: true,
+          status: true,
+          createdAt: true,
+          approvedAt: true,
+          _count: {
+            select: {
+              admins: true,
+              users: true,
+              devices: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      return {
+        jsonrpc: '2.0',
+        id: session.id,
+        result: {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              tenants: tenants.map(t => ({
+                id: t.id,
+                name: t.name,
+                domain: t.domain,
+                status: t.status,
+                createdAt: t.createdAt,
+                approvedAt: t.approvedAt,
+                adminCount: t._count.admins,
+                userCount: t._count.users,
+                deviceCount: t._count.devices
+              })),
+              total: tenants.length
+            }, null, 2)
+          }]
+        }
+      };
+    } catch (error: any) {
+      return {
+        jsonrpc: '2.0',
+        id: session.id,
+        result: {
+          content: [{
+            type: 'text',
+            text: `Error listing tenants: ${error.message}`
+          }],
+          isError: true
+        }
+      };
+    }
   }
 
   private static async executeListTenantUsers(session: MCPSession, args: any): Promise<ToolCallResponse> {
-    // Implementation for list_tenant_users tool (Tenant Admin only)
-    return {
-      jsonrpc: '2.0',
-      id: session.id,
-      result: {
-        content: [{ type: 'text', text: 'Not implemented yet' }]
+    try {
+      // Only tenant admins can list their tenant users
+      if (session.userType !== 'tenant_admin') {
+        throw new Error('Only tenant admins can list tenant users');
       }
-    };
+
+      if (!session.tenantId) {
+        throw new Error('Tenant ID not found in session');
+      }
+
+      const statusFilter = args?.status;
+
+      const where: any = {
+        tenantId: session.tenantId
+      };
+      
+      if (statusFilter) {
+        where.status = statusFilter;
+      }
+
+      const users = await prisma.tenantUser.findMany({
+        where,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          status: true,
+          createdAt: true,
+          lastActive: true,
+          ewelinkUserId: true
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      return {
+        jsonrpc: '2.0',
+        id: session.id,
+        result: {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              tenantId: session.tenantId,
+              users: users.map(u => ({
+                id: u.id,
+                email: u.email,
+                name: u.name,
+                status: u.status,
+                createdAt: u.createdAt,
+                lastActive: u.lastActive,
+                hasEWeLinkAuth: !!u.ewelinkUserId
+              })),
+              total: users.length
+            }, null, 2)
+          }]
+        }
+      };
+    } catch (error: any) {
+      return {
+        jsonrpc: '2.0',
+        id: session.id,
+        result: {
+          content: [{
+            type: 'text',
+            text: `Error listing tenant users: ${error.message}`
+          }],
+          isError: true
+        }
+      };
+    }
   }
 
   private static async readDevicesResource(session: MCPSession, id: any): Promise<MCPResponse> {
-    // Implementation for reading devices resource
-    return this.createSuccessResponse(id, { content: [{ type: 'text', text: 'Not implemented yet' }] });
+    try {
+      const user = await this.getUserWithTokens(session);
+      if (!user || !user.ewelinkAccessToken) {
+        return this.createSuccessResponse(id, {
+          contents: [{
+            uri: 'ewelink://devices',
+            mimeType: 'application/json',
+            text: JSON.stringify({ error: 'eWeLink account not connected', devices: [] })
+          }]
+        });
+      }
+
+      const ewelinkService = new EWeLinkService();
+      ewelinkService.setAccessToken(user.ewelinkAccessToken);
+      const devices = await ewelinkService.getDevices();
+
+      return this.createSuccessResponse(id, {
+        contents: [{
+          uri: 'ewelink://devices',
+          mimeType: 'application/json',
+          text: JSON.stringify({
+            devices: devices.map(d => ({
+              id: d.deviceid,
+              name: d.name,
+              type: d.type,
+              model: d.model,
+              online: d.online,
+              params: d.params
+            })),
+            total: devices.length
+          }, null, 2)
+        }]
+      });
+    } catch (error: any) {
+      return this.createSuccessResponse(id, {
+        contents: [{
+          uri: 'ewelink://devices',
+          mimeType: 'application/json',
+          text: JSON.stringify({ error: error.message, devices: [] })
+        }]
+      });
+    }
   }
 
   private static async readUserProfileResource(session: MCPSession, id: any): Promise<MCPResponse> {
-    // Implementation for reading user profile resource
-    return this.createSuccessResponse(id, { content: [{ type: 'text', text: 'Not implemented yet' }] });
+    try {
+      let userProfile: any = {
+        userId: session.userId,
+        userType: session.userType,
+        tenantId: session.tenantId,
+        sessionId: session.id,
+        connected: false
+      };
+
+      const user = await this.getUserWithTokens(session);
+      if (user && user.ewelinkAccessToken) {
+        userProfile.connected = true;
+        userProfile.ewelinkUserId = user.ewelinkUserId;
+        
+        // Try to get eWeLink user info
+        try {
+          const ewelinkService = new EWeLinkService();
+          ewelinkService.setAccessToken(user.ewelinkAccessToken);
+          const userInfo = await ewelinkService.getUserInfo();
+          userProfile.ewelinkUserInfo = userInfo;
+        } catch (error) {
+          // Silently fail if can't get user info
+        }
+      }
+
+      return this.createSuccessResponse(id, {
+        contents: [{
+          uri: 'ewelink://user/profile',
+          mimeType: 'application/json',
+          text: JSON.stringify(userProfile, null, 2)
+        }]
+      });
+    } catch (error: any) {
+      return this.createSuccessResponse(id, {
+        contents: [{
+          uri: 'ewelink://user/profile',
+          mimeType: 'application/json',
+          text: JSON.stringify({ error: error.message })
+        }]
+      });
+    }
   }
 
   private static async getDeviceControlPrompt(session: MCPSession, id: any, args: any): Promise<MCPResponse> {
-    // Implementation for device control prompt
-    return this.createSuccessResponse(id, { content: [{ type: 'text', text: 'Not implemented yet' }] });
+    const instruction = args?.instruction || 'control my devices';
+    
+    const promptText = `You are an eWeLink smart home assistant. Help the user with the following request:
+
+"${instruction}"
+
+Available Tools:
+- list_devices: Get all connected devices
+- get_device: Get detailed information about a specific device
+- control_device: Control a device (turn on/off, adjust settings, etc.)
+- get_device_status: Get current status of a device
+
+Common Device Control Examples:
+- Turn on/off: {"switch": "on"} or {"switch": "off"}
+- Brightness (0-100): {"bright": 75}
+- Color temperature: {"colorTemp": 50}
+
+First, list the devices to see what's available, then help the user control them based on their request.`;
+
+    return this.createSuccessResponse(id, {
+      description: 'Assistant for controlling eWeLink devices with natural language',
+      messages: [{
+        role: 'user',
+        content: {
+          type: 'text',
+          text: promptText
+        }
+      }]
+    });
   }
 
   private static async getDeviceStatusPrompt(session: MCPSession, id: any, args: any): Promise<MCPResponse> {
-    // Implementation for device status prompt
-    return this.createSuccessResponse(id, { content: [{ type: 'text', text: 'Not implemented yet' }] });
+    const format = args?.format || 'summary';
+    
+    let promptText = 'Generate a comprehensive status report of all eWeLink devices.\n\n';
+    
+    if (format === 'summary') {
+      promptText += `Format: Provide a brief summary including:
+- Total number of devices
+- Number of online vs offline devices
+- Any devices that need attention
+- Quick overview of device states`;
+    } else if (format === 'detailed') {
+      promptText += `Format: Provide detailed information for each device:
+- Device name and type
+- Online/offline status
+- Current settings and parameters
+- Last known state
+- Any alerts or issues`;
+    } else if (format === 'json') {
+      promptText += 'Format: Return structured JSON data with all device information';
+    }
+    
+    promptText += '\n\nUse the list_devices and get_device_status tools to gather the information.';
+
+    return this.createSuccessResponse(id, {
+      description: 'Generate a comprehensive status report of all devices',
+      messages: [{
+        role: 'user',
+        content: {
+          type: 'text',
+          text: promptText
+        }
+      }]
+    });
   }
 }
