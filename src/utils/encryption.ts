@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import logger from './logger';
 
 const ALGORITHM = 'aes-256-gcm';
 const KEY_LENGTH = 32; // 256 bits
@@ -10,7 +11,7 @@ function getEncryptionKey(): Buffer {
   const keyString = process.env.ENCRYPTION_KEY;
   
   if (!keyString) {
-    console.warn('⚠️  ENCRYPTION_KEY not set in environment variables. Using default key for development.');
+    logger.warn('ENCRYPTION_KEY not set in environment variables. Using default key for development.');
     // In production, this should be a proper 256-bit key
     return crypto.scryptSync('default-encryption-key-change-in-production', 'salt', KEY_LENGTH);
   }
@@ -44,8 +45,8 @@ export function encrypt(text: string): string {
     // Combine IV + tag + encrypted data
     const combined = iv.toString('hex') + tag.toString('hex') + encrypted;
     return combined;
-  } catch (error) {
-    console.error('Encryption error:', error);
+  } catch (error: any) {
+    logger.error('Encryption failed', { error: error.message });
     throw new Error('Failed to encrypt data');
   }
 }
@@ -72,8 +73,8 @@ export function decrypt(encryptedText: string): string {
     decrypted += decipher.final('utf8');
     
     return decrypted;
-  } catch (error) {
-    console.error('Decryption error:', error);
+  } catch (error: any) {
+    logger.error('Decryption failed', { error: error.message });
     throw new Error('Failed to decrypt data');
   }
 }

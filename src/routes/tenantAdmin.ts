@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { TenantAdminService } from '../services/tenantAdminService';
 import { tenantAdminAuthMiddleware } from '../middleware/auth';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -40,7 +41,7 @@ router.post('/register', [
     });
 
   } catch (error: any) {
-    console.error('Tenant admin registration error:', error);
+    logger.error('Tenant admin registration failed', { error: error.message, email: req.body.email });
     res.status(400).json({ error: error.message || 'Registration failed' });
   }
 });
@@ -80,7 +81,7 @@ router.post('/login', [
     });
 
   } catch (error: any) {
-    console.error('Tenant admin login error:', error);
+    logger.error('Tenant admin login failed', { error: error.message, email: req.body.email });
     res.status(401).json({ error: error.message || 'Login failed' });
   }
 });
@@ -103,7 +104,7 @@ router.post('/oauth-config', tenantAdminAuthMiddleware, [
       return res.status(401).json({ error: 'Tenant admin authentication required' });
     }
 
-    console.log('OAuth config request:', { tenantAdminId, clientId: clientId ? 'provided' : 'missing' });
+    logger.info('OAuth config request', { tenantAdminId, hasClientId: !!clientId });
 
     const tenant = await TenantAdminService.configureOAuth(tenantAdminId, {
       ewelinkClientId: clientId,
@@ -117,7 +118,7 @@ router.post('/oauth-config', tenantAdminAuthMiddleware, [
     });
 
   } catch (error: any) {
-    console.error('OAuth configuration error:', error);
+    logger.error('OAuth configuration failed', { error: error.message });
     res.status(400).json({ error: error.message || 'Failed to configure OAuth' });
   }
 });
@@ -143,7 +144,7 @@ router.get('/oauth-test', tenantAdminAuthMiddleware, async (req: Request, res: R
     });
 
   } catch (error: any) {
-    console.error('OAuth test error:', error);
+    logger.error('OAuth test failed', { error: error.message });
     res.json({
       success: false,
       error: 'Failed to test OAuth connection'
@@ -166,7 +167,7 @@ router.get('/oauth-config', tenantAdminAuthMiddleware, async (req: Request, res:
     });
 
   } catch (error: any) {
-    console.error('Get OAuth config error:', error);
+    logger.error('Get OAuth config failed', { error: error.message });
     res.status(500).json({ error: 'Failed to get OAuth configuration' });
   }
 });
@@ -197,7 +198,7 @@ router.get('/users', tenantAdminAuthMiddleware, async (req: Request, res: Respon
     res.json({ users: usersWithMCPUrls });
 
   } catch (error: any) {
-    console.error('Get tenant users error:', error);
+    logger.error('Get tenant users failed', { error: error.message });
     res.status(500).json({ error: 'Failed to get tenant users' });
   }
 });
@@ -234,7 +235,7 @@ router.post('/users', tenantAdminAuthMiddleware, [
     });
 
   } catch (error: any) {
-    console.error('Create tenant user error:', error);
+    logger.error('Create tenant user failed', { error: error.message, email: req.body.email });
     res.status(400).json({ error: error.message || 'Failed to create user' });
   }
 });
@@ -265,7 +266,7 @@ router.put('/users/:userId/status', tenantAdminAuthMiddleware, [
     });
 
   } catch (error: any) {
-    console.error('Update user status error:', error);
+    logger.error('Update user status failed', { error: error.message, userId: req.params.userId });
     res.status(400).json({ error: error.message || 'Failed to update user status' });
   }
 });
@@ -298,7 +299,7 @@ router.get('/profile', tenantAdminAuthMiddleware, async (req: Request, res: Resp
     });
 
   } catch (error: any) {
-    console.error('Get tenant admin profile error:', error);
+    logger.error('Get tenant admin profile failed', { error: error.message });
     res.status(500).json({ error: 'Failed to get profile' });
   }
 });
@@ -319,7 +320,7 @@ router.get('/mcp-url', tenantAdminAuthMiddleware, async (req: Request, res: Resp
     });
 
   } catch (error: any) {
-    console.error('Get MCP URL error:', error);
+    logger.error('Get MCP URL failed', { error: error.message });
     res.status(500).json({ error: 'Failed to generate MCP URL' });
   }
 });

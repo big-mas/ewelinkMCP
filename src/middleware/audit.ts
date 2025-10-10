@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@prisma/client';
+import logger from '../utils/logger';
 
 const prisma = new PrismaClient();
 
@@ -59,8 +60,8 @@ export const auditMiddleware = async (req: AuthenticatedRequest, res: Response, 
           await prisma.auditLog.create({
             data: auditData
           });
-        } catch (error) {
-          console.error('Audit logging error:', error);
+        } catch (error: any) {
+          logger.error('Audit logging failed', { error: error.message });
           // Don't throw - audit failures shouldn't break the application
         }
       });

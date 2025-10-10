@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { EWeLinkService } from './ewelinkService';
 import { decrypt } from '../utils/encryption';
+import logger from '../utils/logger';
 import {
   MCPRequest,
   MCPResponse,
@@ -94,8 +95,8 @@ export class EnhancedMCPService {
           });
           break;
       }
-    } catch (error) {
-      console.error('Failed to update user MCP session:', error);
+    } catch (error: any) {
+      logger.error('Failed to update user MCP session', { error: error.message, userId, userType });
     }
   }
 
@@ -142,7 +143,7 @@ export class EnhancedMCPService {
           return this.createErrorResponse(request.id, -32601, `Method not found: ${request.method}`);
       }
     } catch (error: any) {
-      console.error('MCP request handling error:', error);
+      logger.error('MCP request handling error', { method: request.method, error: error.message });
       return this.createErrorResponse(request.id, -32603, error.message || 'Internal error');
     }
   }
@@ -618,7 +619,7 @@ export class EnhancedMCPService {
     });
 
     if (expiredSessions.length > 0) {
-      console.log(`Cleaned up ${expiredSessions.length} expired MCP sessions`);
+      logger.info(`Cleaned up ${expiredSessions.length} expired MCP sessions`);
     }
   }
 
