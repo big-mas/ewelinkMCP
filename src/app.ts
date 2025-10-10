@@ -86,7 +86,7 @@ app.get('*', (req, res, next) => {
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Error:', err);
+  logger.error(`Application error: ${err.message}`, { stack: err.stack, path: req.path });
   
   if (err.type === 'entity.parse.failed') {
     return res.status(400).json({ error: 'Invalid JSON payload' });
@@ -99,24 +99,14 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   });
 });
 
-// Catch-all handler: send back React's index.html file for client-side routing
-app.get('*', (req, res) => {
-  // Only serve index.html for non-API routes
-  if (!req.path.startsWith('/api/')) {
-    res.sendFile(path.join(__dirname, '../public/index.html'));
-  } else {
-    res.status(404).json({ error: 'API route not found' });
-  }
-});
-
 const PORT = config.port || 3000;
 
 if (require.main === module) {
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 eWeLink MCP Server running on port ${PORT}`);
-    console.log(`📱 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
-    console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`🌐 Server accessible at: http://0.0.0.0:${PORT}`);
+    logger.info(`🚀 eWeLink MCP Server running on port ${PORT}`);
+    logger.info(`📱 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
+    logger.info(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
+    logger.info(`🌐 Server accessible at: http://0.0.0.0:${PORT}`);
   });
 }
 

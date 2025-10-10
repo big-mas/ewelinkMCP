@@ -3,6 +3,7 @@ import { body, validationResult } from 'express-validator';
 import { GlobalAdminService } from '../services/globalAdminService';
 import { globalAdminAuthMiddleware } from '../middleware/auth';
 import { PrismaClient } from '@prisma/client';
+import logger from '../utils/logger';
 
 const prisma = new PrismaClient();
 
@@ -14,20 +15,17 @@ router.post('/login', [
   body('password').notEmpty().withMessage('Password is required')
 ], async (req: Request, res: Response) => {
   try {
-    console.log('🚀 Global Admin login route hit');
-    console.log('📧 Request body:', req.body);
+    logger.info('Global Admin login attempt', { email: req.body.email });
     
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      console.log('❌ Validation errors:', errors.array());
+      logger.warn('Global Admin login validation failed', { errors: errors.array() });
       return res.status(400).json({ errors: errors.array() });
     }
 
     const { email, password } = req.body;
-    console.log('✅ Validation passed, attempting authentication...');
-
     const { admin, token } = await GlobalAdminService.authenticate(email, password);
-    console.log('🎉 Authentication successful, preparing response...');
+    logger.info('Global Admin login successful', { adminId: admin.id, email: admin.email });
 
     const response = {
       message: 'Login successful',
@@ -41,11 +39,10 @@ router.post('/login', [
       }
     };
     
-    console.log('📤 Sending response:', JSON.stringify(response, null, 2));
     res.json(response);
 
   } catch (error: any) {
-    console.error('Global admin login error:', error);
+    logger.error('Global admin login failed', { error: error.message, email: req.body.email });
     res.status(401).json({ error: error.message || 'Login failed' });
   }
 });
@@ -82,7 +79,7 @@ router.post('/tenants', globalAdminAuthMiddleware, [
     });
 
   } catch (error: any) {
-    console.error('Create tenant error:', error);
+    logger.error('Create tenant failed', { error: error.message });
     res.status(400).json({ error: error.message || 'Failed to create tenant' });
   }
 });
@@ -120,7 +117,7 @@ router.get('/tenants', globalAdminAuthMiddleware, async (req: Request, res: Resp
     res.json({ tenants: tenantsWithCounts });
 
   } catch (error: any) {
-    console.error('Get tenants error:', error);
+    logger.error('Get tenants failed', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch tenants' });
   }
 });
@@ -144,7 +141,7 @@ router.put('/tenants/:id/approve', globalAdminAuthMiddleware, async (req: Reques
     });
 
   } catch (error: any) {
-    console.error('Approve tenant error:', error);
+    logger.error('Approve tenant failed', { error: error.message, tenantId: req.params.id });
     res.status(400).json({ error: error.message || 'Failed to approve tenant' });
   }
 });
@@ -167,7 +164,7 @@ router.put('/tenants/:id/suspend', globalAdminAuthMiddleware, async (req: Reques
     });
 
   } catch (error: any) {
-    console.error('Suspend tenant error:', error);
+    logger.error('Suspend tenant failed', { error: error.message, tenantId: req.params.id });
     res.status(400).json({ error: error.message || 'Failed to suspend tenant' });
   }
 });
@@ -190,7 +187,7 @@ router.put('/tenants/:id/pause', globalAdminAuthMiddleware, async (req: Request,
     });
 
   } catch (error: any) {
-    console.error('Pause tenant error:', error);
+    logger.error('Pause tenant failed', { error: error.message, tenantId: req.params.id });
     res.status(400).json({ error: error.message || 'Failed to pause tenant' });
   }
 });
@@ -213,7 +210,7 @@ router.put('/tenants/:id/resume', globalAdminAuthMiddleware, async (req: Request
     });
 
   } catch (error: any) {
-    console.error('Resume tenant error:', error);
+    logger.error('Resume tenant failed', { error: error.message, tenantId: req.params.id });
     res.status(400).json({ error: error.message || 'Failed to resume tenant' });
   }
 });
@@ -241,7 +238,7 @@ router.get('/profile', globalAdminAuthMiddleware, async (req: Request, res: Resp
     });
 
   } catch (error: any) {
-    console.error('Get global admin profile error:', error);
+    logger.error('Get global admin profile failed', { error: error.message });
     res.status(500).json({ error: 'Failed to get profile' });
   }
 });
@@ -291,7 +288,7 @@ router.get('/tenants/:id/oauth-callback-url', globalAdminAuthMiddleware, async (
     });
 
   } catch (error: any) {
-    console.error('Get tenant OAuth callback URL error:', error);
+    logger.error('Get tenant OAuth callback URL failed', { error: error.message });
     res.status(500).json({ error: 'Failed to generate callback URL' });
   }
 });
@@ -308,7 +305,7 @@ router.get('/users', globalAdminAuthMiddleware, async (req: Request, res: Respon
     });
 
   } catch (error: any) {
-    console.error('Get all users error:', error);
+    logger.error('Get all users failed', { error: error.message });
     res.status(500).json({ error: 'Failed to get users' });
   }
 });
@@ -321,7 +318,7 @@ router.get('/users/stats', globalAdminAuthMiddleware, async (req: Request, res: 
     res.json(stats);
 
   } catch (error: any) {
-    console.error('Get user stats error:', error);
+    logger.error('Get user stats failed', { error: error.message });
     res.status(500).json({ error: 'Failed to get user statistics' });
   }
 });
@@ -339,7 +336,7 @@ router.get('/users/:id/:type', globalAdminAuthMiddleware, async (req: Request, r
     res.json({ user });
 
   } catch (error: any) {
-    console.error('Get user by ID error:', error);
+    logger.error('Get user by ID failed', { error: error.message, userId: req.params.id });
     res.status(500).json({ error: 'Failed to get user' });
   }
 });
@@ -363,7 +360,7 @@ router.put('/users/:id/:type/status', globalAdminAuthMiddleware, async (req: Req
     });
 
   } catch (error: any) {
-    console.error('Update user status error:', error);
+    logger.error('Update user status failed', { error: error.message, userId: req.params.id });
     res.status(400).json({ error: error.message || 'Failed to update user status' });
   }
 });
@@ -381,7 +378,7 @@ router.delete('/users/:id/:type', globalAdminAuthMiddleware, async (req: Request
     });
 
   } catch (error: any) {
-    console.error('Delete user error:', error);
+    logger.error('Delete user failed', { error: error.message, userId: req.params.id });
     res.status(400).json({ error: error.message || 'Failed to delete user' });
   }
 });
@@ -402,7 +399,7 @@ router.get('/mcp-url', globalAdminAuthMiddleware, async (req: Request, res: Resp
     });
 
   } catch (error: any) {
-    console.error('Get MCP URL error:', error);
+    logger.error('Get MCP URL failed', { error: error.message });
     res.status(500).json({ error: 'Failed to generate MCP URL' });
   }
 });

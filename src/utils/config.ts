@@ -29,10 +29,42 @@ export const config = {
 };
 
 // Validate required environment variables
-const requiredEnvVars = ['JWT_SECRET'];
+const requiredEnvVars = ['JWT_SECRET', 'ENCRYPTION_KEY', 'DATABASE_URL'];
+const productionOnlyVars = ['JWT_SECRET', 'ENCRYPTION_KEY'];
+
+// Check if we're in production
+const isProduction = process.env.NODE_ENV === 'production';
 
 for (const envVar of requiredEnvVars) {
   if (!process.env[envVar]) {
-    console.warn(`⚠️  Warning: ${envVar} environment variable is not set`);
+    const message = `${envVar} environment variable is not set`;
+    
+    if (isProduction && productionOnlyVars.includes(envVar)) {
+      // In production, critical variables must be set
+      throw new Error(`CRITICAL: ${message}. Application cannot start in production without this variable.`);
+    } else {
+      // In development, just warn
+      console.warn(`⚠️  Warning: ${message}`);
+    }
   }
+}
+
+// Additional production-only validations
+if (isProduction) {
+  // Ensure JWT_SECRET is strong enough (at least 32 characters)
+  if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 32) {
+    throw new Error('CRITICAL: JWT_SECRET must be at least 32 characters in production');
+  }
+  
+  // Ensure ENCRYPTION_KEY is proper length (64 hex characters = 32 bytes)
+  if (process.env.ENCRYPTION_KEY && process.env.ENCRYPTION_KEY.length !== 64) {
+    console.warn('⚠️  Warning: ENCRYPTION_KEY should be 64 hex characters (32 bytes) for AES-256');
+  }
+  
+  // Warn about default JWT secret
+  if (process.env.JWT_SECRET === 'your-super-secret-jwt-key-change-in-production') {
+    throw new Error('CRITICAL: Default JWT_SECRET detected in production. Change immediately!');
+  }
+  
+  console.log('✅ Production environment validation passed');
 }

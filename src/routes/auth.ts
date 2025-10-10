@@ -5,6 +5,7 @@ import { body, validationResult } from 'express-validator';
 import { PrismaClient } from '@prisma/client';
 import { config } from '../utils/config';
 import { authMiddleware } from '../middleware/auth';
+import logger from '../utils/logger';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -64,7 +65,7 @@ router.post('/register', [
     });
 
   } catch (error: any) {
-    console.error('Registration error:', error);
+    logger.error('User registration failed', { error: error.message, email: req.body.email });
     res.status(500).json({ error: 'Failed to register user' });
   }
 });
@@ -116,7 +117,7 @@ router.post('/login', [
     });
 
   } catch (error: any) {
-    console.error('Login error:', error);
+    logger.error('User login failed', { error: error.message });
     res.status(500).json({ error: 'Failed to login' });
   }
 });
@@ -145,7 +146,7 @@ router.get('/profile', authMiddleware, async (req: Request, res: Response) => {
     res.json({ user });
 
   } catch (error: any) {
-    console.error('Profile error:', error);
+    logger.error('Get profile failed', { error: error.message });
     res.status(500).json({ error: 'Failed to get user profile' });
   }
 });
@@ -198,7 +199,7 @@ router.put('/profile', authMiddleware, [
     });
 
   } catch (error: any) {
-    console.error('Profile update error:', error);
+    logger.error('Update profile failed', { error: error.message });
     res.status(500).json({ error: 'Failed to update profile' });
   }
 });
@@ -245,7 +246,7 @@ router.put('/password', authMiddleware, [
     res.json({ message: 'Password changed successfully' });
 
   } catch (error: any) {
-    console.error('Password change error:', error);
+    logger.error('Change password failed', { error: error.message });
     res.status(500).json({ error: 'Failed to change password' });
   }
 });

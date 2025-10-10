@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { EnhancedMCPService } from '../services/enhancedMcpService';
 import { PrismaClient } from '@prisma/client';
 import { MCPRequest } from '../types/mcp';
+import logger from '../utils/logger';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -64,7 +65,7 @@ router.all('/:tenantId/:userId', async (req: Request, res: Response) => {
     }
 
   } catch (error: any) {
-    console.error('MCP endpoint error:', error);
+    logger.error('MCP endpoint error', { error: error.message, tenantId, userId });
     res.status(500).json({
       jsonrpc: '2.0',
       error: {
@@ -334,7 +335,7 @@ router.get('/discover', async (req: Request, res: Response) => {
     });
 
   } catch (error: any) {
-    console.error('MCP discovery error:', error);
+    logger.error('MCP discovery error', { error: error.message });
     res.status(500).json({ error: 'Failed to discover MCP servers' });
   }
 });
@@ -362,7 +363,7 @@ router.get('/sessions/:sessionId/status', async (req: Request, res: Response) =>
     });
 
   } catch (error: any) {
-    console.error('Session status error:', error);
+    logger.error('Session status error', { error: error.message, sessionId: req.params.sessionId });
     res.status(500).json({ error: 'Failed to get session status' });
   }
 });
@@ -375,7 +376,7 @@ router.post('/cleanup', async (req: Request, res: Response) => {
     EnhancedMCPService.cleanupExpiredSessions();
     res.json({ message: 'Session cleanup completed' });
   } catch (error: any) {
-    console.error('Session cleanup error:', error);
+    logger.error('Session cleanup error', { error: error.message });
     res.status(500).json({ error: 'Failed to cleanup sessions' });
   }
 });
