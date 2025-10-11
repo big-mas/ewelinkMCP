@@ -13,6 +13,7 @@ import { tenantAdminRoutes } from './routes/tenantAdmin';
 import { tenantUserRoutes } from './routes/tenantUser';
 import { enhancedMcpRoutes } from './routes/enhancedMcp';
 import { auditMiddleware } from './middleware/audit';
+import logger from './utils/logger';
 
 const app = express();
 
@@ -32,7 +33,11 @@ app.use(cors({
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.'
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Skip rate limiting in development or configure proxy properly for production
+  skip: () => process.env.NODE_ENV === 'development'
 });
 app.use(limiter);
 

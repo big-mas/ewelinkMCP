@@ -84,6 +84,39 @@ router.post('/tenants', globalAdminAuthMiddleware, [
   }
 });
 
+// Get System Stats
+router.get('/stats', globalAdminAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const [totalTenants, activeTenants, pendingTenants, totalUsers, activeUsers] = await Promise.all([
+      prisma.tenant.count(),
+      prisma.tenant.count({ where: { status: 'APPROVED' } }),
+      prisma.tenant.count({ where: { status: 'PENDING' } }),
+      Promise.all([
+        prisma.globalAdmin.count(),
+        prisma.tenantAdmin.count(),
+        prisma.tenantUser.count()
+      ]).then(counts => counts.reduce((a, b) => a + b, 0)),
+      Promise.all([
+        prisma.globalAdmin.count({ where: { status: 'ACTIVE' } }),
+        prisma.tenantAdmin.count({ where: { status: 'ACTIVE' } }),
+        prisma.tenantUser.count({ where: { status: 'ACTIVE' } })
+      ]).then(counts => counts.reduce((a, b) => a + b, 0))
+    ]);
+
+    res.json({
+      totalTenants,
+      activeTenants,
+      pendingTenants,
+      totalUsers,
+      activeUsers,
+      systemStatus: 'Healthy'
+    });
+  } catch (error: any) {
+    logger.error('Get stats failed', { error: error.message });
+    res.status(500).json({ error: 'Failed to get system stats' });
+  }
+});
+
 // Get All Tenants
 router.get('/tenants', globalAdminAuthMiddleware, async (req: Request, res: Response) => {
   try {

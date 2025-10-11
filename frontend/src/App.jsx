@@ -80,7 +80,7 @@ function App() {
           password: formData.password
         });
       } else {
-        response = await axios.post('/api/auth/login', {
+        response = await axios.post('/api/tenant-user/login', {
           email: formData.email,
           password: formData.password
         });

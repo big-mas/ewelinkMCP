@@ -165,23 +165,57 @@ router.get('/callback/:tenantId', async (req: Request, res: Response) => {
 // Check OAuth status
 router.get('/status', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    // Extract user ID based on user type
+    const userId = (req as any).user?.id || 
+                   (req as any).globalAdmin?.id || 
+                   (req as any).tenantAdmin?.id || 
+                   (req as any).tenantUser?.id;
     
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        ewelinkAccessToken: true,
-        ewelinkUserId: true,
-        updatedAt: true
-      }
-    });
+    let ewelinkAccessToken: string | null = null;
+    let ewelinkUserId: string | null = null;
+    let updatedAt: Date | null = null;
     
-    const isConnected = !!user?.ewelinkAccessToken;
+    // Fetch eWeLink data based on user type
+    if ((req as any).globalAdmin?.id) {
+      const admin = await prisma.globalAdmin.findUnique({
+        where: { id: userId },
+        select: { ewelinkAccessToken: true, ewelinkUserId: true, updatedAt: true }
+      });
+      ewelinkAccessToken = admin?.ewelinkAccessToken || null;
+      ewelinkUserId = admin?.ewelinkUserId || null;
+      updatedAt = admin?.updatedAt || null;
+    } else if ((req as any).tenantAdmin?.id) {
+      const admin = await prisma.tenantAdmin.findUnique({
+        where: { id: userId },
+        select: { ewelinkAccessToken: true, ewelinkUserId: true, updatedAt: true }
+      });
+      ewelinkAccessToken = admin?.ewelinkAccessToken || null;
+      ewelinkUserId = admin?.ewelinkUserId || null;
+      updatedAt = admin?.updatedAt || null;
+    } else if ((req as any).tenantUser?.id) {
+      const user = await prisma.tenantUser.findUnique({
+        where: { id: userId },
+        select: { ewelinkAccessToken: true, ewelinkUserId: true, updatedAt: true }
+      });
+      ewelinkAccessToken = user?.ewelinkAccessToken || null;
+      ewelinkUserId = user?.ewelinkUserId || null;
+      updatedAt = user?.updatedAt || null;
+    } else if ((req as any).user?.id) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { ewelinkAccessToken: true, ewelinkUserId: true, updatedAt: true }
+      });
+      ewelinkAccessToken = user?.ewelinkAccessToken || null;
+      ewelinkUserId = user?.ewelinkUserId || null;
+      updatedAt = user?.updatedAt || null;
+    }
+    
+    const isConnected = !!ewelinkAccessToken;
     
     res.json({
       connected: isConnected,
-      ewelink_user_id: user?.ewelinkUserId || null,
-      last_updated: user?.updatedAt || null
+      ewelink_user_id: ewelinkUserId,
+      last_updated: updatedAt
     });
     
   } catch (error: any) {

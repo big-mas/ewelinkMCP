@@ -9,34 +9,61 @@ const prisma = new PrismaClient();
 // Get user's eWeLink devices
 router.get('/devices', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    // Extract user ID and tenant ID based on user type
+    const userId = (req as any).user?.id || 
+                   (req as any).globalAdmin?.id || 
+                   (req as any).tenantAdmin?.id || 
+                   (req as any).tenantUser?.id;
     
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { 
-        ewelinkAccessToken: true
-      }
-    });
-
-    // For legacy users, we need to find their migrated tenant
-    // This is a temporary solution during migration period
-    let userTenantId: string;
+    const tenantId = (req as any).tenantAdmin?.tenantId || 
+                     (req as any).tenantUser?.tenantId;
     
-    // Try to find default tenant for legacy users
-    const defaultTenant = await prisma.tenant.findFirst({
-      where: { name: 'Default Tenant' }
-    });
+    let ewelinkAccessToken: string | null = null;
+    let userTenantId: string | null = tenantId || null;
     
-    if (!defaultTenant) {
-      return res.status(400).json({ 
-        error: 'No tenant found for user. Please complete migration.',
-        code: 'TENANT_NOT_FOUND'
+    // Fetch eWeLink access token based on user type
+    if ((req as any).globalAdmin?.id) {
+      const admin = await prisma.globalAdmin.findUnique({
+        where: { id: userId },
+        select: { ewelinkAccessToken: true }
       });
+      ewelinkAccessToken = admin?.ewelinkAccessToken || null;
+    } else if ((req as any).tenantAdmin?.id) {
+      const admin = await prisma.tenantAdmin.findUnique({
+        where: { id: userId },
+        select: { ewelinkAccessToken: true }
+      });
+      ewelinkAccessToken = admin?.ewelinkAccessToken || null;
+    } else if ((req as any).tenantUser?.id) {
+      const user = await prisma.tenantUser.findUnique({
+        where: { id: userId },
+        select: { ewelinkAccessToken: true }
+      });
+      ewelinkAccessToken = user?.ewelinkAccessToken || null;
+    } else if ((req as any).user?.id) {
+      // Legacy user support
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { ewelinkAccessToken: true }
+      });
+      ewelinkAccessToken = user?.ewelinkAccessToken || null;
+      
+      // Try to find default tenant for legacy users
+      const defaultTenant = await prisma.tenant.findFirst({
+        where: { name: 'Default Tenant' }
+      });
+      
+      if (!defaultTenant) {
+        return res.status(400).json({ 
+          error: 'No tenant found for user. Please complete migration.',
+          code: 'TENANT_NOT_FOUND'
+        });
+      }
+      
+      userTenantId = defaultTenant.id;
     }
     
-    userTenantId = defaultTenant.id;
-    
-    if (!user?.ewelinkAccessToken) {
+    if (!ewelinkAccessToken) {
       return res.status(400).json({ 
         error: 'eWeLink account not connected',
         code: 'EWELINK_NOT_CONNECTED'
@@ -44,7 +71,7 @@ router.get('/devices', authMiddleware, async (req: Request, res: Response) => {
     }
     
     const ewelinkService = new EWeLinkService();
-    ewelinkService.setAccessToken(user.ewelinkAccessToken);
+    ewelinkService.setAccessToken(ewelinkAccessToken);
     
     const devices = await ewelinkService.getDevices();
     
