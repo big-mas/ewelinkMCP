@@ -121,8 +121,14 @@ router.get('/callback/:tenantId', async (req: Request, res: Response) => {
     
     // Use tenant's OAuth credentials if available
     if (tenant.ewelinkClientId && tenant.ewelinkClientSecret) {
-      // TODO: Initialize service with tenant-specific credentials
-      console.log('🔧 Using tenant-specific OAuth credentials');
+      console.log('🔧 Using tenant-specific OAuth credentials for tenant:', tenant.name);
+      ewelinkService.setTenantCredentials(
+        tenant.ewelinkClientId,
+        tenant.ewelinkClientSecret,
+        tenant.ewelinkRedirectUri || `${config.frontendUrl}/oauth/callback/${tenantId}`
+      );
+    } else {
+      console.log('⚠️ No tenant-specific OAuth credentials, using defaults');
     }
     
     const tokenData = await ewelinkService.exchangeCodeForToken(code as string);

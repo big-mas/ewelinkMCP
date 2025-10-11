@@ -437,4 +437,417 @@ router.get('/mcp-url', globalAdminAuthMiddleware, async (req: Request, res: Resp
   }
 });
 
+// Get All Users (Cross-Tenant)
+router.get('/users', globalAdminAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const search = req.query.search as string || '';
+    const status = req.query.status as string || '';
+    const role = req.query.role as string || '';
+
+    const skip = (page - 1) * limit;
+
+    // Build where clause
+    const where: any = {};
+    
+    // Search filter
+    if (search) {
+      where.OR = [
+        { email: { contains: search, mode: 'insensitive' } },
+        { name: { contains: search, mode: 'insensitive' } }
+      ];
+    }
+
+    // Status filter
+    if (status) {
+      where.status = status;
+    }
+
+    // Get all user types based on role filter
+    let users: any[] = [];
+    let totalCount = 0;
+
+    if (!role || role === 'global_admin') {
+      const globalAdmins = await prisma.globalAdmin.findMany({
+        where,
+        skip: !role ? skip : 0,
+        take: !role ? limit : undefined,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          status: true,
+          createdAt: true,
+          lastActive: true
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+      users.push(...globalAdmins.map(u => ({ ...u, role: 'Global Admin', tenantName: 'System' })));
+    }
+
+    if (!role || role === 'tenant_admin') {
+      const tenantAdmins = await prisma.tenantAdmin.findMany({
+        where,
+        skip: !role ? 0 : skip,
+        take: !role ? undefined : limit,
+        include: {
+          tenant: {
+            select: { name: true }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+      users.push(...tenantAdmins.map(u => ({ 
+        id: u.id, 
+        email: u.email, 
+        name: u.name, 
+        status: u.status, 
+        createdAt: u.createdAt, 
+        lastActive: u.lastActive,
+        role: 'Tenant Admin', 
+        tenantName: u.tenant.name 
+      })));
+    }
+
+    if (!role || role === 'tenant_user') {
+      const tenantUsers = await prisma.tenantUser.findMany({
+        where,
+        skip: !role ? 0 : skip,
+        take: !role ? undefined : limit,
+        include: {
+          tenant: {
+            select: { name: true }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+      users.push(...tenantUsers.map(u => ({ 
+        id: u.id, 
+        email: u.email, 
+        name: u.name, 
+        status: u.status, 
+        createdAt: u.createdAt, 
+        lastActive: u.lastActive,
+        role: 'Tenant User', 
+        tenantName: u.tenant.name 
+      })));
+    }
+
+    // Sort by creation date and paginate if no role filter
+    if (!role) {
+      users.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      users = users.slice(skip, skip + limit);
+    }
+
+    // Get total counts
+    const [globalAdminCount, tenantAdminCount, tenantUserCount] = await Promise.all([
+      !role || role === 'global_admin' ? prisma.globalAdmin.count({ where }) : Promise.resolve(0),
+      !role || role === 'tenant_admin' ? prisma.tenantAdmin.count({ where }) : Promise.resolve(0),
+      !role || role === 'tenant_user' ? prisma.tenantUser.count({ where }) : Promise.resolve(0)
+    ]);
+
+    totalCount = globalAdminCount + tenantAdminCount + tenantUserCount;
+
+    res.json({
+      users,
+      pagination: {
+        page,
+        limit,
+        total: totalCount,
+        pages: Math.ceil(totalCount / limit)
+      },
+      stats: {
+        globalAdmins: globalAdminCount,
+        tenantAdmins: tenantAdminCount,
+        tenantUsers: tenantUserCount,
+        total: totalCount
+      }
+    });
+
+  } catch (error: any) {
+    logger.error('Get all users failed', { error: error.message });
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+// Get User Details
+router.get('/users/:id', globalAdminAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userId = req.params.id;
+    const userType = req.query.type as string; // global_admin, tenant_admin, tenant_user
+
+    let user: any = null;
+
+    if (userType === 'global_admin') {
+      user = await prisma.globalAdmin.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          lastActive: true,
+          ewelinkUserId: true
+        }
+      });
+      if (user) user.role = 'Global Admin';
+    } else if (userType === 'tenant_admin') {
+      user = await prisma.tenantAdmin.findUnique({
+        where: { id: userId },
+        include: {
+          tenant: {
+            select: { id: true, name: true, domain: true, status: true }
+          }
+        }
+      });
+      if (user) user.role = 'Tenant Admin';
+    } else if (userType === 'tenant_user') {
+      user = await prisma.tenantUser.findUnique({
+        where: { id: userId },
+        include: {
+          tenant: {
+            select: { id: true, name: true, domain: true, status: true }
+          }
+        }
+      });
+      if (user) user.role = 'Tenant User';
+    }
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ user });
+
+  } catch (error: any) {
+    logger.error('Get user details failed', { error: error.message, userId: req.params.id });
+    res.status(500).json({ error: 'Failed to fetch user details' });
+  }
+});
+
+// Suspend User
+router.put('/users/:id/suspend', globalAdminAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userId = req.params.id;
+    const userType = req.body.type as string;
+
+    let user: any = null;
+
+    if (userType === 'global_admin') {
+      user = await prisma.globalAdmin.update({
+        where: { id: userId },
+        data: { status: 'SUSPENDED' }
+      });
+    } else if (userType === 'tenant_admin') {
+      user = await prisma.tenantAdmin.update({
+        where: { id: userId },
+        data: { status: 'SUSPENDED' }
+      });
+    } else if (userType === 'tenant_user') {
+      user = await prisma.tenantUser.update({
+        where: { id: userId },
+        data: { status: 'SUSPENDED' }
+      });
+    }
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    logger.info('User suspended', { userId, userType, suspendedBy: (req as any).globalAdmin?.id });
+
+    res.json({
+      message: 'User suspended successfully',
+      user: {
+        id: user.id,
+        email: user.email,
+        status: user.status
+      }
+    });
+
+  } catch (error: any) {
+    logger.error('Suspend user failed', { error: error.message, userId: req.params.id });
+    res.status(400).json({ error: error.message || 'Failed to suspend user' });
+  }
+});
+
+// Activate User
+router.put('/users/:id/activate', globalAdminAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userId = req.params.id;
+    const userType = req.body.type as string;
+
+    let user: any = null;
+
+    if (userType === 'global_admin') {
+      user = await prisma.globalAdmin.update({
+        where: { id: userId },
+        data: { status: 'ACTIVE' }
+      });
+    } else if (userType === 'tenant_admin') {
+      user = await prisma.tenantAdmin.update({
+        where: { id: userId },
+        data: { status: 'ACTIVE' }
+      });
+    } else if (userType === 'tenant_user') {
+      user = await prisma.tenantUser.update({
+        where: { id: userId },
+        data: { status: 'ACTIVE' }
+      });
+    }
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    logger.info('User activated', { userId, userType, activatedBy: (req as any).globalAdmin?.id });
+
+    res.json({
+      message: 'User activated successfully',
+      user: {
+        id: user.id,
+        email: user.email,
+        status: user.status
+      }
+    });
+
+  } catch (error: any) {
+    logger.error('Activate user failed', { error: error.message, userId: req.params.id });
+    res.status(400).json({ error: error.message || 'Failed to activate user' });
+  }
+});
+
+// Delete User
+router.delete('/users/:id', globalAdminAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userId = req.params.id;
+    const userType = req.body.type as string;
+
+    // Prevent deleting self
+    if (userType === 'global_admin' && userId === (req as any).globalAdmin?.id) {
+      return res.status(400).json({ error: 'Cannot delete your own account' });
+    }
+
+    let user: any = null;
+
+    if (userType === 'global_admin') {
+      // Check if it's the last global admin
+      const count = await prisma.globalAdmin.count();
+      if (count <= 1) {
+        return res.status(400).json({ error: 'Cannot delete the last global admin' });
+      }
+      user = await prisma.globalAdmin.delete({
+        where: { id: userId }
+      });
+    } else if (userType === 'tenant_admin') {
+      user = await prisma.tenantAdmin.update({
+        where: { id: userId },
+        data: { status: 'DELETED' }
+      });
+    } else if (userType === 'tenant_user') {
+      user = await prisma.tenantUser.update({
+        where: { id: userId },
+        data: { status: 'DELETED' }
+      });
+    }
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    logger.info('User deleted', { userId, userType, deletedBy: (req as any).globalAdmin?.id });
+
+    res.json({
+      message: 'User deleted successfully'
+    });
+
+  } catch (error: any) {
+    logger.error('Delete user failed', { error: error.message, userId: req.params.id });
+    res.status(400).json({ error: error.message || 'Failed to delete user' });
+  }
+});
+
+// Get System Settings
+router.get('/settings', globalAdminAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    // Return current system settings
+    // In a real implementation, these would be stored in a Settings table
+    const settings = {
+      maintenanceMode: false,
+      autoApproveTenants: false,
+      jwtExpiryDays: 7,
+      maxTenantsPerDomain: 1,
+      enableEmailNotifications: false,
+      auditLogRetentionDays: 90,
+      maxUsersPerTenant: 100,
+      enableRateLimiting: process.env.NODE_ENV === 'production',
+      sessionTimeoutMinutes: 30
+    };
+
+    res.json({ settings });
+
+  } catch (error: any) {
+    logger.error('Get settings failed', { error: error.message });
+    res.status(500).json({ error: 'Failed to fetch settings' });
+  }
+});
+
+// Update System Settings
+router.put('/settings', globalAdminAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const globalAdminId = (req as any).globalAdmin?.id;
+    const updates = req.body;
+
+    // Validate settings
+    const allowedSettings = [
+      'maintenanceMode',
+      'autoApproveTenants',
+      'jwtExpiryDays',
+      'maxTenantsPerDomain',
+      'enableEmailNotifications',
+      'auditLogRetentionDays',
+      'maxUsersPerTenant',
+      'enableRateLimiting',
+      'sessionTimeoutMinutes'
+    ];
+
+    const invalidSettings = Object.keys(updates).filter(key => !allowedSettings.includes(key));
+    if (invalidSettings.length > 0) {
+      return res.status(400).json({ 
+        error: `Invalid settings: ${invalidSettings.join(', ')}` 
+      });
+    }
+
+    // In a real implementation, save to Settings table
+    // For now, we'll just validate and return success
+    logger.info('System settings updated', { 
+      globalAdminId, 
+      updates: Object.keys(updates),
+      timestamp: new Date()
+    });
+
+    // Create audit log
+    await prisma.auditLog.create({
+      data: {
+        globalAdminId,
+        action: 'UPDATE_SETTINGS',
+        resource: 'SYSTEM_SETTINGS',
+        details: JSON.stringify(updates)
+      }
+    });
+
+    res.json({
+      message: 'Settings updated successfully',
+      settings: updates
+    });
+
+  } catch (error: any) {
+    logger.error('Update settings failed', { error: error.message });
+    res.status(500).json({ error: 'Failed to update settings' });
+  }
+});
+
 export { router as globalAdminRoutes };

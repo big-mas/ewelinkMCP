@@ -5,6 +5,9 @@ import { EWeLinkDevice, EWeLinkDeviceControl } from '../types/mcp';
 export class EWeLinkService {
   private api: AxiosInstance;
   private accessToken: string | null = null;
+  private tenantClientId: string | null = null;
+  private tenantClientSecret: string | null = null;
+  private tenantRedirectUri: string | null = null;
 
   constructor() {
     this.api = axios.create({
@@ -29,17 +32,28 @@ export class EWeLinkService {
     this.accessToken = token;
   }
 
+  setTenantCredentials(clientId: string, clientSecret: string, redirectUri: string) {
+    this.tenantClientId = clientId;
+    this.tenantClientSecret = clientSecret;
+    this.tenantRedirectUri = redirectUri;
+  }
+
   async exchangeCodeForToken(code: string): Promise<{
     access_token: string;
     refresh_token: string;
     user: any;
   }> {
     try {
+      // Use tenant-specific credentials if available, otherwise use default
+      const clientId = this.tenantClientId || config.ewelink.clientId;
+      const clientSecret = this.tenantClientSecret || config.ewelink.clientSecret;
+      const redirectUri = this.tenantRedirectUri || config.ewelink.redirectUri;
+
       const response = await axios.post(`${config.ewelink.oauthUrl}/v2/user/oauth/token`, {
         grant_type: 'authorization_code',
-        client_id: config.ewelink.clientId,
-        client_secret: config.ewelink.clientSecret,
-        redirect_uri: config.ewelink.redirectUri,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
         code: code
       });
 
@@ -55,10 +69,14 @@ export class EWeLinkService {
     refresh_token: string;
   }> {
     try {
+      // Use tenant-specific credentials if available, otherwise use default
+      const clientId = this.tenantClientId || config.ewelink.clientId;
+      const clientSecret = this.tenantClientSecret || config.ewelink.clientSecret;
+
       const response = await axios.post(`${config.ewelink.oauthUrl}/v2/user/oauth/token`, {
         grant_type: 'refresh_token',
-        client_id: config.ewelink.clientId,
-        client_secret: config.ewelink.clientSecret,
+        client_id: clientId,
+        client_secret: clientSecret,
         refresh_token: refreshToken
       });
 

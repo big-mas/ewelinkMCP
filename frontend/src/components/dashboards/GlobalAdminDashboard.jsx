@@ -8,7 +8,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 
-export function GlobalAdminDashboard({ user, onLogout, tenants, stats, onCreateTenant, onApproveTenant, onSuspendTenant, onRefresh, loading }) {
+export function GlobalAdminDashboard({ 
+  user, onLogout, tenants, stats, allUsers, settings,
+  onCreateTenant, onApproveTenant, onSuspendTenant, onSuspendUser, onActivateUser, onUpdateSettings,
+  onRefresh, loading 
+}) {
   const [showCreateTenant, setShowCreateTenant] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -16,6 +20,8 @@ export function GlobalAdminDashboard({ user, onLogout, tenants, stats, onCreateT
     ewelinkClientId: '',
     ewelinkClientSecret: '',
   });
+  const [userFilter, setUserFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -322,34 +328,273 @@ export function GlobalAdminDashboard({ user, onLogout, tenants, stats, onCreateT
           <TabsContent value="users">
             <Card className="border-0 shadow-lg">
               <CardHeader>
-                <CardTitle>User Management</CardTitle>
-                <CardDescription>Manage users across all tenants</CardDescription>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle>User Management</CardTitle>
+                    <CardDescription>Manage users across all tenants</CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <select
+                      value={userFilter}
+                      onChange={(e) => setUserFilter(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="all">All Users</option>
+                      <option value="global_admin">Global Admins</option>
+                      <option value="tenant_admin">Tenant Admins</option>
+                      <option value="tenant_user">Tenant Users</option>
+                    </select>
+                    <input
+                      type="text"
+                      placeholder="Search users..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-12">
-                  <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">User Management</h3>
-                  <p className="text-gray-500">Cross-tenant user management interface coming soon...</p>
-                </div>
+                {allUsers && allUsers.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-gray-200">
+                          <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">USER</th>
+                          <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">ROLE</th>
+                          <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">TENANT</th>
+                          <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">STATUS</th>
+                          <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">LAST ACTIVE</th>
+                          <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">ACTIONS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allUsers
+                          .filter(u => userFilter === 'all' || u.role.toLowerCase().replace(' ', '_') === userFilter)
+                          .filter(u => !searchQuery || u.email.toLowerCase().includes(searchQuery.toLowerCase()) || u.name?.toLowerCase().includes(searchQuery.toLowerCase()))
+                          .map((userItem) => (
+                          <tr key={userItem.id} className="border-b border-gray-100 hover:bg-gray-50">
+                            <td className="py-3 px-4">
+                              <div>
+                                <div className="font-medium text-gray-900">{userItem.name || userItem.email}</div>
+                                <div className="text-sm text-gray-500">{userItem.email}</div>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="text-sm text-gray-700">{userItem.role}</span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="text-sm text-gray-700">{userItem.tenantName || 'N/A'}</span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                userItem.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 
+                                userItem.status === 'SUSPENDED' ? 'bg-red-100 text-red-800' : 
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {userItem.status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="text-sm text-gray-500">
+                                {userItem.lastActive ? new Date(userItem.lastActive).toLocaleDateString() : 'Never'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex gap-2">
+                                {userItem.status === 'ACTIVE' ? (
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline"
+                                    onClick={() => onSuspendUser(userItem.id, userItem.role.toLowerCase().replace(' ', '_'))}
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  >
+                                    <XCircle className="h-4 w-4 mr-1" />
+                                    Suspend
+                                  </Button>
+                                ) : (
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline"
+                                    onClick={() => onActivateUser(userItem.id, userItem.role.toLowerCase().replace(' ', '_'))}
+                                    className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                  >
+                                    <CheckCircle className="h-4 w-4 mr-1" />
+                                    Activate
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Users Found</h3>
+                    <p className="text-gray-500">No users match your current filters</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
 
           {/* Settings Tab */}
           <TabsContent value="settings">
-            <Card className="border-0 shadow-lg">
-              <CardHeader>
-                <CardTitle>System Settings</CardTitle>
-                <CardDescription>Global configuration and preferences</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12">
-                  <Settings className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">System Configuration</h3>
-                  <p className="text-gray-500">System settings interface coming soon...</p>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="space-y-6">
+              {/* General Settings */}
+              <Card className="border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle>General Settings</CardTitle>
+                  <CardDescription>Core system configuration</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                    <div>
+                      <h4 className="font-medium text-gray-900">Maintenance Mode</h4>
+                      <p className="text-sm text-gray-500">Temporarily disable user access for system updates</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={settings.maintenanceMode || false}
+                        onChange={(e) => onUpdateSettings({ maintenanceMode: e.target.checked })}
+                        className="sr-only peer" 
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                    </label>
+                  </div>
+
+                  <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                    <div>
+                      <h4 className="font-medium text-gray-900">Auto-Approve Tenants</h4>
+                      <p className="text-sm text-gray-500">Automatically approve new tenant registrations</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={settings.autoApproveTenants || false}
+                        onChange={(e) => onUpdateSettings({ autoApproveTenants: e.target.checked })}
+                        className="sr-only peer" 
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                    </label>
+                  </div>
+
+                  <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                    <div>
+                      <h4 className="font-medium text-gray-900">Enable Email Notifications</h4>
+                      <p className="text-sm text-gray-500">Send email alerts for important events</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={settings.enableEmailNotifications || false}
+                        onChange={(e) => onUpdateSettings({ enableEmailNotifications: e.target.checked })}
+                        className="sr-only peer" 
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                    </label>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Security Settings */}
+              <Card className="border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle>Security Settings</CardTitle>
+                  <CardDescription>Authentication and access control configuration</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="py-3 border-b border-gray-100">
+                    <label className="block">
+                      <span className="font-medium text-gray-900">JWT Token Expiry (days)</span>
+                      <p className="text-sm text-gray-500 mb-2">How long authentication tokens remain valid</p>
+                      <input
+                        type="number"
+                        min="1"
+                        max="30"
+                        value={settings.jwtExpiryDays || 7}
+                        onChange={(e) => onUpdateSettings({ jwtExpiryDays: parseInt(e.target.value) })}
+                        className="w-32 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="py-3 border-b border-gray-100">
+                    <label className="block">
+                      <span className="font-medium text-gray-900">Session Timeout (minutes)</span>
+                      <p className="text-sm text-gray-500 mb-2">Auto-logout inactive users after specified time</p>
+                      <input
+                        type="number"
+                        min="5"
+                        max="120"
+                        value={settings.sessionTimeoutMinutes || 30}
+                        onChange={(e) => onUpdateSettings({ sessionTimeoutMinutes: parseInt(e.target.value) })}
+                        className="w-32 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                    <div>
+                      <h4 className="font-medium text-gray-900">Enable Rate Limiting</h4>
+                      <p className="text-sm text-gray-500">Protect API from abuse and DoS attacks</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={settings.enableRateLimiting || false}
+                        onChange={(e) => onUpdateSettings({ enableRateLimiting: e.target.checked })}
+                        className="sr-only peer" 
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                    </label>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Tenant Settings */}
+              <Card className="border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle>Tenant Settings</CardTitle>
+                  <CardDescription>Multi-tenancy configuration</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="py-3 border-b border-gray-100">
+                    <label className="block">
+                      <span className="font-medium text-gray-900">Max Users Per Tenant</span>
+                      <p className="text-sm text-gray-500 mb-2">Maximum number of users allowed per tenant</p>
+                      <input
+                        type="number"
+                        min="1"
+                        max="1000"
+                        value={settings.maxUsersPerTenant || 100}
+                        onChange={(e) => onUpdateSettings({ maxUsersPerTenant: parseInt(e.target.value) })}
+                        className="w-32 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="py-3 border-b border-gray-100">
+                    <label className="block">
+                      <span className="font-medium text-gray-900">Audit Log Retention (days)</span>
+                      <p className="text-sm text-gray-500 mb-2">How long to keep audit logs before archiving</p>
+                      <input
+                        type="number"
+                        min="30"
+                        max="365"
+                        value={settings.auditLogRetentionDays || 90}
+                        onChange={(e) => onUpdateSettings({ auditLogRetentionDays: parseInt(e.target.value) })}
+                        className="w-32 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </label>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </main>

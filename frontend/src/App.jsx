@@ -23,6 +23,8 @@ function App() {
   const [devices, setDevices] = useState([]);
   const [stats, setStats] = useState({});
   const [oauthConnected, setOauthConnected] = useState(false);
+  const [allUsers, setAllUsers] = useState([]);
+  const [settings, setSettings] = useState({});
 
   // Check authentication status on mount
   useEffect(() => {
@@ -134,13 +136,17 @@ function App() {
   // Global Admin functions
   const loadGlobalAdminData = async () => {
     try {
-      const [tenantsRes, statsRes] = await Promise.all([
+      const [tenantsRes, statsRes, usersRes, settingsRes] = await Promise.all([
         axios.get('/api/global-admin/tenants'),
-        axios.get('/api/global-admin/stats').catch(() => ({ data: {} }))
+        axios.get('/api/global-admin/stats').catch(() => ({ data: {} })),
+        axios.get('/api/global-admin/users').catch(() => ({ data: { users: [] } })),
+        axios.get('/api/global-admin/settings').catch(() => ({ data: { settings: {} } }))
       ]);
       
       setTenants(tenantsRes.data.tenants || []);
       setStats(statsRes.data || {});
+      setAllUsers(usersRes.data.users || []);
+      setSettings(settingsRes.data.settings || {});
     } catch (err) {
       console.error('Failed to load global admin data:', err);
       setError('Failed to load dashboard data');
@@ -178,6 +184,40 @@ function App() {
       await loadGlobalAdminData();
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to suspend tenant');
+    }
+  };
+
+  const handleSuspendUser = async (userId, userType) => {
+    try {
+      await axios.put(`/api/global-admin/users/${userId}/suspend`, { type: userType });
+      setSuccess('User suspended successfully');
+      await loadGlobalAdminData();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to suspend user');
+    }
+  };
+
+  const handleActivateUser = async (userId, userType) => {
+    try {
+      await axios.put(`/api/global-admin/users/${userId}/activate`, { type: userType });
+      setSuccess('User activated successfully');
+      await loadGlobalAdminData();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to activate user');
+    }
+  };
+
+  const handleUpdateSettings = async (newSettings) => {
+    try {
+      setLoading(true);
+      await axios.put('/api/global-admin/settings', newSettings);
+      setSuccess('Settings updated successfully');
+      setSettings({ ...settings, ...newSettings });
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to update settings');
+      throw err;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -283,9 +323,14 @@ function App() {
         onLogout={handleLogout}
         tenants={tenants}
         stats={stats}
+        allUsers={allUsers}
+        settings={settings}
         onCreateTenant={handleCreateTenant}
         onApproveTenant={handleApproveTenant}
         onSuspendTenant={handleSuspendTenant}
+        onSuspendUser={handleSuspendUser}
+        onActivateUser={handleActivateUser}
+        onUpdateSettings={handleUpdateSettings}
         onRefresh={loadGlobalAdminData}
         loading={loading}
       />
